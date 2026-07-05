@@ -1,0 +1,312 @@
+@import "tailwindcss";
+
+/* =================================================================
+   EmpwrU Design Tokens
+   See: documentation/10_Design_System_and_Decisions.md
+   ================================================================= */
+
+:root {
+  /* Primary Colors */
+  --color-white: #ffffff;
+  --color-charcoal: #030303;
+  --color-magenta: #bc03b9;
+  --color-deep-violet: #4a0f7e;
+  --color-warm-ivory: #efebee;
+  --color-pumpkin: #f27321;
+  --color-bg-card: #f8fafc;
+
+  /* Semantic Colors */
+  --background: var(--color-white);
+  --foreground: var(--color-charcoal);
+
+  /* Text hierarchy */
+  --color-text-muted: rgba(3, 3, 3, 0.6);
+  /* charcoal at 60% for secondary text */
+  --color-text-subtle: rgba(3, 3, 3, 0.4);
+  /* charcoal at 40% for very light text */
+  --color-bg-subtle: #f9fafb;
+  /* subtle background for cards/sections */
+
+  /* Brand Gradient */
+  --gradient-brand: linear-gradient(135deg,
+      var(--color-deep-violet) 0%,
+      var(--color-magenta) 45%,
+      var(--color-pumpkin) 100%);
+
+  /* Spacing & Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+
+  /* Safe area for mobile */
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@theme inline {
+  /* Custom breakpoint for larger phones (400px+) */
+  --breakpoint-xs: 400px;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  /* Brand colors for Tailwind utilities */
+  --color-brand-primary: var(--color-magenta);
+  --color-brand-surface: var(--color-white);
+  --color-brand-accent: var(--color-pumpkin);
+
+  /* Legacy color names (keep for compatibility) */
+  --color-magenta: var(--color-magenta);
+  --color-deep-violet: var(--color-deep-violet);
+  --color-warm-ivory: var(--color-warm-ivory);
+  --color-pumpkin: var(--color-pumpkin);
+
+  /* Semantic text/background colors */
+  --color-text-muted: var(--color-text-muted);
+  --color-text-subtle: var(--color-text-subtle);
+  --color-bg-subtle: var(--color-bg-subtle);
+  --color-warm-ivory: var(--color-warm-ivory);
+  --color-bg-card: var(--color-bg-card);
+
+  /* Montserrat - Regular weight only per brand guidelines */
+  --font-sans: var(--font-montserrat);
+}
+
+/* No dark mode for this app - always light/bright */
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-montserrat, "Montserrat"), Arial, Helvetica, sans-serif;
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+/* Typography - let Tailwind handle sizing, just set defaults */
+h1 {
+  font-size: 1.5rem;
+  /* text-xl */
+  line-height: 1.1;
+}
+
+h2 {
+  line-height: 1.1;
+}
+
+/* Utility classes */
+.bg-brand-gradient {
+  background: var(--gradient-brand);
+}
+
+.pb-safe {
+  padding-bottom: max(1.5rem, var(--safe-area-bottom));
+}
+
+/* Focus states for accessibility */
+.focus-ring {
+  outline: none;
+}
+
+.focus-ring:focus-visible {
+  box-shadow: 0 0 0 3px rgba(188, 3, 185, 0.4);
+}
+
+/* =================================================================
+   Splash Screen Logo Animations
+   ================================================================= */
+
+@keyframes logo-entrance {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes logo-shimmer {
+
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+
+  50% {
+    filter: brightness(1.1);
+  }
+}
+
+/* =================================================================
+   Notification Bell Wiggle Animation
+   ================================================================= */
+
+@keyframes wiggle {
+
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  10% {
+    transform: rotate(20deg);
+  }
+
+  20% {
+    transform: rotate(-18deg);
+  }
+
+  30% {
+    transform: rotate(16deg);
+  }
+
+  40% {
+    transform: rotate(-14deg);
+  }
+
+  50% {
+    transform: rotate(12deg);
+  }
+
+  60% {
+    transform: rotate(-10deg);
+  }
+
+  70% {
+    transform: rotate(8deg);
+  }
+
+  80% {
+    transform: rotate(-5deg);
+  }
+
+  90% {
+    transform: rotate(3deg);
+  }
+}
+
+.animate-wiggle {
+  animation: wiggle 1.2s ease-in-out;
+}
+
+/* Separate animation for hover to force re-trigger */
+@keyframes wiggle-hover {
+
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  10% {
+    transform: rotate(20deg);
+  }
+
+  20% {
+    transform: rotate(-18deg);
+  }
+
+  30% {
+    transform: rotate(16deg);
+  }
+
+  40% {
+    transform: rotate(-14deg);
+  }
+
+  50% {
+    transform: rotate(12deg);
+  }
+
+  60% {
+    transform: rotate(-10deg);
+  }
+
+  70% {
+    transform: rotate(8deg);
+  }
+
+  80% {
+    transform: rotate(-5deg);
+  }
+
+  90% {
+    transform: rotate(3deg);
+  }
+}
+
+.group:hover .group-hover\:animate-wiggle {
+  animation: wiggle-hover 0.8s ease-in-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Welcome Name Entrance */
+/* .bg-clip-text {
+  -webkit-background-clip: text;
+  background-clip: text;
+} */
+
+/* Smooth animated brand gradient text */
+/* @keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient-text {
+  background-size: 200% 200%;
+  animation: gradient-shift 6s ease-in-out infinite;
+} */
+
+/* ================================================================
+   Animated Gradient Text (for dynamic name only)
+   ================================================================ */
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-gradient-text {
+  background-size: 200% 200%;
+  animation: gradient-shift 6s ease-in-out infinite;
+}
+
+/* Safari support */
+.bg-clip-text {
+  -webkit-background-clip: text;
+  background-clip: text;
+}
