@@ -39,6 +39,7 @@ export default function DashboardPage() {
 
   // Check onboarding status synchronously - redirect if not completed
   const onboardingComplete = isOnboardingCompleted();
+  console.log("****************onboardingComplete", onboardingComplete)
 
   // Initialize state with lazy initializers (only runs if onboarding is complete)
   const [goals] = useState<Goal[]>(() => onboardingComplete ? getGoals() : []);
