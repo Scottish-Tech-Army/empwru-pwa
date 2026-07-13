@@ -20,6 +20,7 @@ import {
   type BaselineResponse,
   SkillsCurrentStatus,
 } from "@/lib/storage";
+import { loadBaselineForCurrentUser, saveBaselineToSupabase } from "@/lib/baseline";
 import { Sunrise, Sunset, Sparkles, Lightbulb, ChevronLeft } from "lucide-react";
 
 // =============================================================================
@@ -97,11 +98,16 @@ export default function BaselinePage() {
   const [showCelebration, setShowCelebration] = useState(false);
 
   useEffect(() => {
-    const savedBaseline = getBaselineResponse();
-    if (savedBaseline && Object.keys(savedBaseline).length > 0) {
-      setBaseline(savedBaseline);
-      setShowSummary(true);
-    }
+    const hydrateBaseline = async () => {
+      const result = await loadBaselineForCurrentUser();
+      const savedBaseline = result.baseline;
+      if (savedBaseline && Object.keys(savedBaseline).length > 0) {
+        setBaseline(savedBaseline);
+        setShowSummary(true);
+      }
+    };
+
+    hydrateBaseline();
   }, []);
 
   const updateResponse = <K extends keyof BaselineResponse>(
@@ -118,16 +124,25 @@ export default function BaselinePage() {
     }
   };
 
-  const handleFinish = () => {
-    // Final section - save and go to dashboard
-    saveBaselineResponse(responses);
+  const handleFinish = async () => {
+    const completedAt = new Date().toISOString();
+    const mergedResponses = {
+      ...responses,
+      completedAt,
+    } as Partial<BaselineResponse>;
+
+    saveBaselineResponse(mergedResponses);
     completeBaseline();
 
-    // Calculate reminder date as one week from now
     const nextWeek = new Date();
     nextWeek.setDate(nextWeek.getDate() + 7);
 
-    // Save reminder preferences and mark complete
+    await saveBaselineToSupabase(
+      mergedResponses,
+      reminderDay ?? null,
+      reminderTime ?? null
+    );
+
     saveOnboardingState({
       currentStep: 7,
       completed: true,

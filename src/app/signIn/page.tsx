@@ -6,23 +6,31 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase"
 
 export default function SignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleSignInAccount = () => {
+  const handleSignInAccount = async () => {
     // Handle sign-up logic here
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    console.log(data.user);
     router.push("/onboarding/baseline");
-
   };
-
-
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-white px-4 py-12">
-
       {/* empwru Logo */}
       <div className="mb-8">
         <Image
@@ -45,7 +53,7 @@ export default function SignupPage() {
         <LoginButton type="signin" />
 
         <button
-          onClick={() => { }}
+          onClick={() => {}}
           className="w-full flex items-center justify-center gap-2 border border-gray-200 rounded-md py-3 px-4 text-sm font-medium hover:bg-gray-100 transition"
         >
           <img
@@ -105,15 +113,16 @@ export default function SignupPage() {
         >
           Create Aaccount
         </button> */}
-        <PrimaryButton onClick={handleSignInAccount}>
-          Sign in
-        </PrimaryButton>
+        <PrimaryButton onClick={handleSignInAccount}>Sign in</PrimaryButton>
       </form>
 
       {/* Sign up link */}
       <p className="text-center text-sm text-text-muted mt-8">
         Don't have an account?{" "}
-        <Link href="/signUp" className="text-[var(--color-charcoal)] font-semibold underline">
+        <Link
+          href="/signUp"
+          className="text-[var(--color-charcoal)] font-semibold underline"
+        >
           Sign up
         </Link>
       </p>

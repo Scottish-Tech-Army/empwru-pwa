@@ -6,23 +6,33 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 export default function SignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleCreateAccount = () => {
+  const handleCreateAccount = async () => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    console.log(data);
+    alert("Signup successful!");
     // Handle sign-up logic here
-    router.push("/onboarding/welcome");
-
+    //router.push("/onboarding/welcome");
+    router.push("/signIn");
   };
-
-
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-white px-4 py-12">
-
       {/* empwru Logo */}
       <div className="mb-8">
         <Image
@@ -45,7 +55,7 @@ export default function SignupPage() {
         <LoginButton type="signup" />
 
         <button
-          onClick={() => { }}
+          onClick={() => {}}
           className="w-full flex items-center justify-center gap-2 border border-gray-200 rounded-md py-3 px-4 text-sm font-medium hover:bg-gray-100 transition"
         >
           <img
@@ -105,15 +115,16 @@ export default function SignupPage() {
         >
           Create Aaccount
         </button> */}
-        <PrimaryButton onClick={handleCreateAccount}>
-          Sign up
-        </PrimaryButton>
+        <PrimaryButton onClick={handleCreateAccount}>Sign up</PrimaryButton>
       </form>
 
       {/* Sign in link */}
       <p className="text-center text-sm text-text-muted mt-8">
         Already have an account?{" "}
-        <Link href="/signIn" className="text-[var(--color-charcoal)] font-semibold underline">
+        <Link
+          href="/signIn"
+          className="text-[var(--color-charcoal)] font-semibold underline"
+        >
           Sign in
         </Link>
       </p>
