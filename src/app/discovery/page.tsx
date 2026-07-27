@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Lightbulb, Wrench, Star, Heart, Compass, ChevronRight } from "lucide-react";
 import BottomNav from "@/components/ui/BottomNav";
-import { getDiscoveryData, type DiscoveryPillar } from "@/lib/storage";
+import { loadDiscoveryDataFromSupabase, type DiscoveryPillar } from "@/lib/storage";
 import { QuoteCard } from "@/components";
+import UserInitialsBadge from "@/components/ui/UserInitialsBadge";
 
 interface PillarCard {
   key: DiscoveryPillar;
@@ -42,28 +43,42 @@ const PILLARS: PillarCard[] = [
 ];
 
 export default function DiscoveryPage() {
-  const [pillarData] = useState<Record<DiscoveryPillar, string[]>>(() => {
-    if (typeof window === "undefined") return { skills: [], qualities: [], values: [], interests: [] };
-    return getDiscoveryData();
+  const [pillarData, setPillarData] = useState<Record<DiscoveryPillar, string[]>>({
+    skills: [],
+    qualities: [],
+    values: [],
+    interests: [],
   });
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    requestAnimationFrame(() => {
+    async function loadData() {
+      const remoteData = await loadDiscoveryDataFromSupabase();
+      setPillarData({
+        skills: remoteData.skills || [],
+        qualities: remoteData.qualities || [],
+        values: remoteData.values || [],
+        interests: remoteData.interests || [],
+      });
       setIsHydrated(true);
-    });
+    }
+
+    void loadData();
   }, []);
 
   return (
     <div className="min-h-dvh flex flex-col bg-bg-card">
       {/* Header */}
       <header className="pt-6 pb-4 bg-white sticky top-0 z-30">
-        <div className="max-w-5xl mx-auto px-6">
-          <div className="flex items-center gap-3">
-            <Lightbulb className="w-8 h-8 text-brand-primary" />
-            <h1 className="text-2xl text-[var(--color-charcoal)]">Discovery</h1>
+        <div className="max-w-5xl mx-auto px-6 flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <Lightbulb className="w-8 h-8 text-brand-primary" />
+              <h1 className="text-2xl text-[var(--color-charcoal)]">Discovery</h1>
+            </div>
+            <p className="text-text-muted mt-1">Step into your potential</p>
           </div>
-          <p className="text-text-muted mt-1">Step into your potential</p>
+          <UserInitialsBadge />
         </div>
       </header>
 

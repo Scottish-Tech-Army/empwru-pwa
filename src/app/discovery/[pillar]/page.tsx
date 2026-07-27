@@ -140,7 +140,6 @@ export default function PillarDetailPage() {
       const data = getDiscoveryData();
       const currentItems = (pillarKey && data[pillarKey]) ? [...data[pillarKey]] : [];
 
-      // Update state in next frame to avoid cascading render warning
       requestAnimationFrame(() => {
         setItems(currentItems);
         setInitialItems(currentItems);

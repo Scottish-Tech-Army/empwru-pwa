@@ -932,6 +932,62 @@ export function getDiscoveryData(): DiscoveryData {
   }
 }
 
+async function getDiscoveryDataFromSupabase(): Promise<DiscoveryData | null> {
+  if (!isBrowser()) return null;
+
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from("discovery_data")
+    .select("payload")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to load discovery data from Supabase", error);
+    return null;
+  }
+
+  if (!data?.payload) return null;
+
+  return data.payload as DiscoveryData;
+}
+
+export async function syncDiscoveryDataToSupabase(data: DiscoveryData): Promise<void> {
+  if (!isBrowser()) return;
+
+  const userId = await getCurrentUserId();
+  if (!userId) return;
+
+  const payload = {
+    user_id: userId,
+    payload: {
+      ...data,
+      updatedAt: new Date().toISOString(),
+    },
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase
+    .from("discovery_data")
+    .upsert(payload, { onConflict: "user_id" });
+
+  if (error) {
+    console.error("Failed to sync discovery data to Supabase", error);
+  }
+}
+
+export async function loadDiscoveryDataFromSupabase(): Promise<DiscoveryData> {
+  const remoteData = await getDiscoveryDataFromSupabase();
+  if (remoteData) {
+    localStorage.setItem(STORAGE_KEYS.DISCOVERY, JSON.stringify(remoteData));
+    return remoteData;
+  }
+
+  return getDiscoveryData();
+}
+
 /**
  * Save discovery data to localStorage
  */
@@ -945,6 +1001,7 @@ export function saveDiscoveryData(data: Partial<DiscoveryData>): void {
     updatedAt: new Date().toISOString()
   };
   localStorage.setItem(STORAGE_KEYS.DISCOVERY, JSON.stringify(updated));
+  void syncDiscoveryDataToSupabase(updated);
 }
 
 /**

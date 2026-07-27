@@ -11,6 +11,7 @@ import {
   getMomentumDays,
   isDiscoveryPopulated,
 } from "@/lib/storage";
+import { supabase } from "@/lib/supabase";
 
 import BottomNav from "@/components/ui/BottomNav";
 import {
@@ -26,7 +27,13 @@ import DailyQuote from "@/components/ui/DailyQuote";
 import { DottedEmptyState } from "@/components";
 import { Lightbulb } from "lucide-react";
 
+function getDisplayNameFromEmail(email: string | null | undefined) {
+  const localPart = email?.split("@")[0] ?? "user";
+  const cleaned = localPart.replace(/[^a-zA-Z0-9]/g, "");
+  const derived = cleaned.slice(0, 6) || "user";
 
+  return derived.charAt(0).toUpperCase() + derived.slice(1);
+}
 
 /**
  * Dashboard - Main home page after onboarding
@@ -38,35 +45,75 @@ export default function DashboardPage() {
   const router = useRouter();
 
   const [hasHydrated, setHasHydrated] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [showCheckInPrompt, setShowCheckInPrompt] = useState(false);
   const [momentum, setMomentum] = useState(0);
   const [isDiscoveryEmpty, setIsDiscoveryEmpty] = useState(false);
+  const [displayName, setDisplayName] = useState("User");
+  const [avatarInitials, setAvatarInitials] = useState("US");
 
   useEffect(() => {
-    const complete = isOnboardingCompleted();
-    setOnboardingComplete(complete);
+    let isActive = true;
 
-    if (complete) {
-      setGoals(getGoals());
-      setShowCheckInPrompt(!hasCheckedInThisWeek());
-      setMomentum(getMomentumDays());
-      setIsDiscoveryEmpty(!isDiscoveryPopulated());
+    async function initialize() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!isActive) return;
+
+      if (!session) {
+        setIsAuthenticated(false);
+        setAuthChecked(true);
+        router.replace("/signIn");
+        return;
+      }
+
+      setIsAuthenticated(true);
+
+      const derivedName = getDisplayNameFromEmail(session.user.email);
+      const metadataName = session.user.user_metadata?.display_name;
+      const nextDisplayName = metadataName || derivedName;
+      const nextInitials = nextDisplayName.slice(0, 2).toUpperCase();
+
+      setDisplayName(nextDisplayName);
+      setAvatarInitials(nextInitials);
+
+      if (!metadataName || metadataName !== derivedName) {
+        await supabase.auth.updateUser({ data: { display_name: derivedName } });
+      }
+
+      const complete = isOnboardingCompleted();
+      setOnboardingComplete(complete);
+
+      if (complete) {
+        setGoals(getGoals());
+        setShowCheckInPrompt(!hasCheckedInThisWeek());
+        setMomentum(getMomentumDays());
+        setIsDiscoveryEmpty(!isDiscoveryPopulated());
+      } else {
+        setGoals([]);
+        setShowCheckInPrompt(false);
+        setMomentum(0);
+        setIsDiscoveryEmpty(false);
+      }
+
+      setHasHydrated(true);
+      setAuthChecked(true);
     }
 
-    setHasHydrated(true);
-  }, []);
+    void initialize();
 
-  // Redirect to onboarding if not completed
-  useEffect(() => {
-    if (hasHydrated && !onboardingComplete) {
-      router.replace("/welcome");
-    }
-  }, [hasHydrated, onboardingComplete, router]);
+    return () => {
+      isActive = false;
+    };
+  }, [router]);
 
   // Show nothing while redirecting or hydrating
-  if (!hasHydrated || !onboardingComplete) {
+  if (!hasHydrated || !authChecked || !isAuthenticated) {
     return (
       <div className="min-h-dvh flex items-center justify-center bg-brand-surface">
         <div className="animate-pulse text-text-subtle">Loading...</div>
@@ -96,12 +143,17 @@ export default function DashboardPage() {
     <div className="min-h-dvh bg-bg-card flex flex-col">
       {/* Header */}
       <header className="pt-6 pb-4 bg-white sticky top-0 z-30">
-        <div className="max-w-5xl mx-auto px-6">
-          <h1 className="text-2xl text-[var(--color-charcoal)] mb-1 flex items-center gap-3">
-            <GreetingIcon className="w-8 h-8 text-brand-primary" />
-            {greeting}
-          </h1>
-          <p className="text-text-muted mt-1">Step into your potential</p>
+        <div className="max-w-5xl mx-auto px-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl text-[var(--color-charcoal)] mb-1 flex items-center gap-3">
+              <GreetingIcon className="w-8 h-8 text-brand-primary" />
+              {greeting}
+            </h1>
+            <p className="text-text-muted mt-1">Step into your potential</p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-primary text-white font-semibold text-lg shadow-sm shrink-0">
+            {avatarInitials}
+          </div>
         </div>
       </header>
 
