@@ -15,7 +15,6 @@ function getInitialsFromEmail(email: string | null | undefined) {
 export default function UserInitialsBadge() {
   const router = useRouter();
   const [initials, setInitials] = useState("U");
-  const [menuOpen, setMenuOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -55,48 +54,20 @@ export default function UserInitialsBadge() {
     };
   }, []);
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setMenuOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setMenuOpen(false);
-    router.replace("/signIn");
+  const handleProfileClick = () => {
+    router.push("/profile");
   };
 
   return (
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        onClick={() => setMenuOpen((prev) => !prev)}
+        onClick={handleProfileClick}
         className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-primary text-white font-semibold text-lg shadow-sm shrink-0"
-        aria-label="Open account menu"
+        aria-label="Open profile page"
       >
         {initials}
       </button>
-
-      {menuOpen && (
-        <div className="absolute right-0 mt-2 w-36 rounded-xl border border-gray-200 bg-white p-2 shadow-lg z-50">
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Logout
-          </button>
-        </div>
-      )}
     </div>
   );
 }
