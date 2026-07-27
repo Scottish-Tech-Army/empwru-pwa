@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
   getGoalById,
+  loadGoalByIdFromSupabase,
   Step,
   toggleStep,
   updateGoal,
@@ -77,16 +78,19 @@ export default function GoalDetailPage() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [showCompletionConfirm, setShowCompletionConfirm] = useState(false);
 
-  const refreshGoal = useCallback(() => {
-    if (id) {
-      const data = getGoalById(id);
-      if (data) setGoal(data);
-      else router.push("/goals");
+  const refreshGoal = useCallback(async () => {
+    if (!id) return;
+
+    const data = await loadGoalByIdFromSupabase(id);
+    if (data) {
+      setGoal(data);
+    } else {
+      router.push("/goals");
     }
   }, [id, router]);
 
   useEffect(() => {
-    refreshGoal();
+    void refreshGoal();
   }, [refreshGoal]);
 
   const handleStepToggle = (stepId: string) => {
