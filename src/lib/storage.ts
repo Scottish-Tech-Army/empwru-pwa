@@ -5,6 +5,8 @@
  * Data is stored as JSON.
  */
 
+import { supabase } from "@/lib/supabase";
+
 const STORAGE_PREFIX = "empwru:";
 
 // Storage keys
@@ -227,6 +229,139 @@ export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
+async function getCurrentUserId(): Promise<string | null> {
+  if (!isBrowser()) return null;
+
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+
+  if (error) {
+    console.error("Unable to read Supabase session", error);
+    return null;
+  }
+
+  return session?.user?.id ?? null;
+}
+
+function mapGoalFromSupabase(row: Record<string, unknown>): Goal {
+  return {
+    id: String(row.id ?? ""),
+    title: String(row.title ?? ""),
+    category: (row.category as GoalCategory) ?? "other",
+    whyMatters: String(row.why_matters ?? ""),
+    successCriteria: row.success_criteria ? String(row.success_criteria) : undefined,
+    confidence: row.confidence !== null && row.confidence !== undefined ? Number(row.confidence) : undefined,
+    targetDate: row.target_date ? String(row.target_date) : undefined,
+    feelWhenDone: String(row.feel_when_done ?? ""),
+    holdingBack: row.holding_back ? String(row.holding_back) : undefined,
+    createdAt: String(row.created_at ?? new Date().toISOString()),
+    status: (row.status as Goal["status"]) ?? "active",
+    steps: Array.isArray(row.steps) ? (row.steps as Step[]) : [],
+    milestones: Array.isArray(row.steps) ? (row.steps as Step[]) : [],
+    actions: Array.isArray(row.actions) ? (row.actions as Action[]) : [],
+  };
+}
+
+function mapGoalForSupabase(goal: Goal, userId: string) {
+  return {
+    id: goal.id,
+    user_id: userId,
+    title: goal.title,
+    category: goal.category,
+    why_matters: goal.whyMatters,
+    success_criteria: goal.successCriteria ?? null,
+    confidence: goal.confidence ?? null,
+    target_date: goal.targetDate ?? null,
+    feel_when_done: goal.feelWhenDone ?? "",
+    holding_back: goal.holdingBack ?? null,
+    created_at: goal.createdAt,
+    updated_at: new Date().toISOString(),
+    status: goal.status,
+    steps: goal.steps ?? [],
+    actions: goal.actions ?? [],
+  };
+}
+
+export async function syncGoalToSupabase(goal: Goal): Promise<void> {
+  if (!isBrowser()) return;
+
+  const userId = await getCurrentUserId();
+  if (!userId) return;
+
+  const { error } = await supabase
+    .from("goals")
+    .upsert(mapGoalForSupabase(goal, userId), { onConflict: "id" });
+
+  if (error) {
+    console.error("Failed to sync goal to Supabase", error);
+  }
+}
+
+export async function loadGoalsFromSupabase(): Promise<Goal[]> {
+  if (!isBrowser()) return getGoals();
+
+  const userId = await getCurrentUserId();
+  if (!userId) return getGoals();
+
+  const { data, error } = await supabase
+    .from("goals")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("Failed to load goals from Supabase", error);
+    return getGoals();
+  }
+
+  const remoteGoals = (data ?? []).map((row) => mapGoalFromSupabase(row as Record<string, unknown>));
+
+  if (remoteGoals.length > 0) {
+    saveGoals(remoteGoals);
+    return remoteGoals;
+  }
+
+  return [];
+}
+
+export async function loadGoalByIdFromSupabase(id: string): Promise<Goal | null> {
+  if (!isBrowser()) return getGoalById(id);
+
+  const userId = await getCurrentUserId();
+  if (!userId) return getGoalById(id);
+
+  const { data, error } = await supabase
+    .from("goals")
+    .select("*")
+    .eq("id", id)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to load goal from Supabase", error);
+    return getGoalById(id);
+  }
+
+  if (!data) {
+    return getGoalById(id);
+  }
+
+  const remoteGoal = mapGoalFromSupabase(data as Record<string, unknown>);
+  const existingGoals = getGoals();
+  const index = existingGoals.findIndex((goal) => goal.id === remoteGoal.id);
+
+  if (index >= 0) {
+    existingGoals[index] = remoteGoal;
+  } else {
+    existingGoals.push(remoteGoal);
+  }
+
+  saveGoals(existingGoals);
+  return remoteGoal;
+}
+
 /**
  * Get all goals from localStorage and ensure consistency
  */
@@ -287,6 +422,7 @@ export function createGoal(
   const goals = getGoals();
   goals.push(newGoal);
   saveGoals(goals);
+  void syncGoalToSupabase(newGoal);
 
   return newGoal;
 }
@@ -302,6 +438,7 @@ export function updateGoal(id: string, updates: Partial<Goal>): Goal | null {
 
   goals[index] = { ...goals[index], ...updates };
   saveGoals(goals);
+  void syncGoalToSupabase(goals[index]);
 
   return goals[index];
 }
@@ -316,6 +453,11 @@ export function deleteGoal(id: string): boolean {
   if (filtered.length === goals.length) return false;
 
   saveGoals(filtered);
+
+  if (isBrowser()) {
+    void supabase.from("goals").delete().eq("id", id);
+  }
+
   return true;
 }
 

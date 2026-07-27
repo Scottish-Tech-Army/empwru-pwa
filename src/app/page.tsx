@@ -37,25 +37,36 @@ import { Lightbulb } from "lucide-react";
 export default function DashboardPage() {
   const router = useRouter();
 
-  // Check onboarding status synchronously - redirect if not completed
-  const onboardingComplete = isOnboardingCompleted();
+  const [hasHydrated, setHasHydrated] = useState(false);
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [showCheckInPrompt, setShowCheckInPrompt] = useState(false);
+  const [momentum, setMomentum] = useState(0);
+  const [isDiscoveryEmpty, setIsDiscoveryEmpty] = useState(false);
 
-  // Initialize state with lazy initializers (only runs if onboarding is complete)
-  const [goals] = useState<Goal[]>(() => onboardingComplete ? getGoals() : []);
-  const [showCheckInPrompt] = useState(() => onboardingComplete ? !hasCheckedInThisWeek() : false);
-  const [momentum] = useState(() => onboardingComplete ? getMomentumDays() : 0);
-  // Reactive calculation for Discovery status (re-checks on navigation/render)
-  const isDiscoveryEmpty = onboardingComplete ? !isDiscoveryPopulated() : false;
+  useEffect(() => {
+    const complete = isOnboardingCompleted();
+    setOnboardingComplete(complete);
+
+    if (complete) {
+      setGoals(getGoals());
+      setShowCheckInPrompt(!hasCheckedInThisWeek());
+      setMomentum(getMomentumDays());
+      setIsDiscoveryEmpty(!isDiscoveryPopulated());
+    }
+
+    setHasHydrated(true);
+  }, []);
 
   // Redirect to onboarding if not completed
   useEffect(() => {
-    if (!onboardingComplete) {
+    if (hasHydrated && !onboardingComplete) {
       router.replace("/welcome");
     }
-  }, [onboardingComplete, router]);
+  }, [hasHydrated, onboardingComplete, router]);
 
-  // Show nothing while redirecting
-  if (!onboardingComplete) {
+  // Show nothing while redirecting or hydrating
+  if (!hasHydrated || !onboardingComplete) {
     return (
       <div className="min-h-dvh flex items-center justify-center bg-brand-surface">
         <div className="animate-pulse text-text-subtle">Loading...</div>

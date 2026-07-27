@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Goal, getGoals, getGoalProgress } from "@/lib/storage";
+import { Goal, getGoalProgress, loadGoalsFromSupabase } from "@/lib/storage";
 import GoalCard from "@/components/ui/GoalCard";
 import BottomNav from "@/components/ui/BottomNav";
 import DailyQuote from "@/components/ui/DailyQuote";
@@ -43,8 +43,33 @@ function isGoalAtRisk(goal: Goal): boolean {
  * Goals list page - Shows all goals with option to create new
  */
 export default function GoalsPage() {
-  const [goals] = useState<Goal[]>(() => getGoals());
-  const [isLoading] = useState(() => false);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadGoals() {
+      try {
+        const loadedGoals = await loadGoalsFromSupabase();
+        if (isMounted) {
+          setGoals(loadedGoals);
+        }
+      } catch (error) {
+        console.error("Failed to load goals", error);
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadGoals();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Filter and Sort state
   const [isFilterOpen, setIsFilterOpen] = useState(false);
