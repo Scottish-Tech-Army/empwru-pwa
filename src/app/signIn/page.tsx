@@ -26,7 +26,7 @@ export default function SignupPage() {
     }
 
     console.log(data.user);
-    router.push("/onboarding/baseline");
+    router.push("/");
   };
 
   return (

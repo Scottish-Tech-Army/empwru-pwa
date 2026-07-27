@@ -35,6 +35,7 @@ import {
   Check,
   Lightbulb,
 } from "lucide-react";
+import UserInitialsBadge from "@/components/ui/UserInitialsBadge";
 
 /**
  * Progress page - Visual progress across impact measures
@@ -165,12 +166,15 @@ export default function ProgressPage() {
 
       {/* Header */}
       <header className="pt-6 pb-4 bg-white sticky top-0 z-30">
-        <div className="max-w-5xl mx-auto px-6">
-          <div className="flex items-center gap-3">
-            <BarChart3 className="w-8 h-8 text-brand-primary" />
-            <h1 className="text-2xl text-[var(--color-charcoal)]">Progress</h1>
+        <div className="max-w-5xl mx-auto px-6 flex items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <BarChart3 className="w-8 h-8 text-brand-primary" />
+              <h1 className="text-2xl text-[var(--color-charcoal)]">Progress</h1>
+            </div>
+            <p className="text-text-muted mt-1">Step into your potential</p>
           </div>
-          <p className="text-text-muted mt-1">Step into your potential</p>
+          <UserInitialsBadge />
         </div>
       </header>
 

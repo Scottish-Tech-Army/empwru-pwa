@@ -8,6 +8,7 @@ import BottomNav from "@/components/ui/BottomNav";
 import DailyQuote from "@/components/ui/DailyQuote";
 import { BottomSheet, GoalFilters, GoalSort } from "@/components";
 import { GoalFilterState, DEFAULT_FILTERS, CATEGORIES, STATUS_OPTIONS } from "@/components/ui/GoalFilters";
+import UserInitialsBadge from "@/components/ui/UserInitialsBadge";
 
 import { Plus, SlidersHorizontal, RotateCcw, ArrowUpDown, Target } from "lucide-react";
 import { DottedEmptyState } from "@/components";
@@ -178,7 +179,7 @@ export default function GoalsPage() {
     <div className="min-h-dvh bg-bg-card flex flex-col">
       {/* Header */}
       <header className="pt-6 pb-4 bg-white sticky top-0 z-30">
-        <div className="max-w-5xl mx-auto px-6 flex items-center justify-between">
+        <div className="max-w-5xl mx-auto px-6 flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
               <Target className="w-8 h-8 text-brand-primary" />
@@ -223,6 +224,7 @@ export default function GoalsPage() {
             >
               <Plus className="w-5 h-5" />
             </Link>
+            <UserInitialsBadge />
           </div>
         </div>
       </header>
