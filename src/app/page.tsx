@@ -14,6 +14,7 @@ import {
 import { supabase } from "@/lib/supabase";
 
 import BottomNav from "@/components/ui/BottomNav";
+import UserInitialsBadge from "@/components/ui/UserInitialsBadge";
 import {
   Flame,
   Bell,
@@ -53,7 +54,6 @@ export default function DashboardPage() {
   const [momentum, setMomentum] = useState(0);
   const [isDiscoveryEmpty, setIsDiscoveryEmpty] = useState(false);
   const [displayName, setDisplayName] = useState("User");
-  const [avatarInitials, setAvatarInitials] = useState("US");
 
   useEffect(() => {
     let isActive = true;
@@ -77,10 +77,8 @@ export default function DashboardPage() {
       const derivedName = getDisplayNameFromEmail(session.user.email);
       const metadataName = session.user.user_metadata?.display_name;
       const nextDisplayName = metadataName || derivedName;
-      const nextInitials = nextDisplayName.slice(0, 2).toUpperCase();
 
       setDisplayName(nextDisplayName);
-      setAvatarInitials(nextInitials);
 
       if (!metadataName || metadataName !== derivedName) {
         await supabase.auth.updateUser({ data: { display_name: derivedName } });
@@ -151,9 +149,7 @@ export default function DashboardPage() {
             </h1>
             <p className="text-text-muted mt-1">Step into your potential</p>
           </div>
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-primary text-white font-semibold text-lg shadow-sm shrink-0">
-            {avatarInitials}
-          </div>
+          <UserInitialsBadge />
         </div>
       </header>
 

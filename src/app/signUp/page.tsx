@@ -12,6 +12,7 @@ export default function SignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   const handleCreateAccount = async () => {
     const { data, error } = await supabase.auth.signUp({
@@ -25,10 +26,7 @@ export default function SignupPage() {
     }
 
     console.log(data);
-    alert("Signup successful!");
-    // Handle sign-up logic here
-    //router.push("/onboarding/welcome");
-    router.push("/signIn");
+    setShowConfirmation(true);
   };
 
   return (
@@ -137,6 +135,28 @@ export default function SignupPage() {
         </Link>
         .
       </p>
+
+      {showConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4">
+          <div className="w-full max-w-sm rounded-[32px] bg-white p-6 text-center shadow-[0_25px_60px_rgba(0,0,0,0.12)] ring-1 ring-black/10">
+            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[var(--color-magenta)]">Confirmation sent</p>
+            <h2 className="mt-4 text-2xl font-bold text-[var(--color-charcoal)]">Check your inbox</h2>
+            <p className="mt-3 text-sm leading-7 text-[rgba(3,3,3,0.75)]">
+              A confirmation email has been sent to your email address.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setShowConfirmation(false);
+                router.push("/signIn");
+              }}
+              className="mt-6 w-full rounded-2xl bg-brand-primary px-6 py-3 text-sm font-semibold text-white transition hover:bg-brand-primary/90"
+            >
+              Back to sign in
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
