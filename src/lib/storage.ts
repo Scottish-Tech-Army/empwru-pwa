@@ -42,6 +42,11 @@ function isBrowser(): boolean {
   return typeof window !== "undefined";
 }
 
+function notifyGoalDataChanged(): void {
+  if (!isBrowser()) return;
+  window.dispatchEvent(new Event("empwru-goals-updated"));
+}
+
 /**
  * Get onboarding state from localStorage
  */
@@ -232,17 +237,36 @@ export function generateId(): string {
 async function getCurrentUserId(): Promise<string | null> {
   if (!isBrowser()) return null;
 
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
+  try {
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-  if (error) {
-    console.error("Unable to read Supabase session", error);
+    if (userError) {
+      console.error("Unable to read Supabase user", userError);
+      return null;
+    }
+
+    if (user?.id) {
+      return user.id;
+    }
+
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+
+    if (sessionError) {
+      console.error("Unable to read Supabase session", sessionError);
+      return null;
+    }
+
+    return session?.user?.id ?? null;
+  } catch (error) {
+    console.error("Unable to resolve Supabase user", error);
     return null;
   }
-
-  return session?.user?.id ?? null;
 }
 
 function mapGoalFromSupabase(row: Record<string, unknown>): Goal {
@@ -300,10 +324,13 @@ export async function syncGoalToSupabase(goal: Goal): Promise<void> {
 }
 
 export async function loadGoalsFromSupabase(): Promise<Goal[]> {
-  if (!isBrowser()) return getGoals();
+  if (!isBrowser()) return [];
 
   const userId = await getCurrentUserId();
-  if (!userId) return getGoals();
+  if (!userId) {
+    console.debug("loadGoalsFromSupabase: no userId available");
+    return [];
+  }
 
   const { data, error } = await supabase
     .from("goals")
@@ -313,10 +340,11 @@ export async function loadGoalsFromSupabase(): Promise<Goal[]> {
 
   if (error) {
     console.error("Failed to load goals from Supabase", error);
-    return getGoals();
+    return [];
   }
 
   const remoteGoals = (data ?? []).map((row) => mapGoalFromSupabase(row as Record<string, unknown>));
+  console.debug("loadGoalsFromSupabase: userId=", userId, "rows=", (data ?? []).length, "mapped=", remoteGoals.length);
 
   if (remoteGoals.length > 0) {
     saveGoals(remoteGoals);
@@ -327,10 +355,10 @@ export async function loadGoalsFromSupabase(): Promise<Goal[]> {
 }
 
 export async function loadGoalByIdFromSupabase(id: string): Promise<Goal | null> {
-  if (!isBrowser()) return getGoalById(id);
+  if (!isBrowser()) return null;
 
   const userId = await getCurrentUserId();
-  if (!userId) return getGoalById(id);
+  if (!userId) return null;
 
   const { data, error } = await supabase
     .from("goals")
@@ -341,24 +369,15 @@ export async function loadGoalByIdFromSupabase(id: string): Promise<Goal | null>
 
   if (error) {
     console.error("Failed to load goal from Supabase", error);
-    return getGoalById(id);
+    return null;
   }
 
   if (!data) {
-    return getGoalById(id);
+    return null;
   }
 
   const remoteGoal = mapGoalFromSupabase(data as Record<string, unknown>);
-  const existingGoals = getGoals();
-  const index = existingGoals.findIndex((goal) => goal.id === remoteGoal.id);
-
-  if (index >= 0) {
-    existingGoals[index] = remoteGoal;
-  } else {
-    existingGoals.push(remoteGoal);
-  }
-
-  saveGoals(existingGoals);
+  saveGoals([remoteGoal]);
   return remoteGoal;
 }
 
@@ -401,6 +420,7 @@ export function getGoalById(id: string): Goal | null {
 function saveGoals(goals: Goal[]): void {
   if (!isBrowser()) return;
   localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(goals));
+  notifyGoalDataChanged();
 }
 
 /**

@@ -12,6 +12,7 @@ export default function SignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   const [showConfirmation, setShowConfirmation] = useState(false);
 
   const handleCreateAccount = async () => {
@@ -21,10 +22,11 @@ export default function SignupPage() {
     });
 
     if (error) {
-      alert(error.message);
+      setErrorMessage(error.message ?? "Unable to create account. Please try again.");
       return;
     }
 
+    setErrorMessage("");
     console.log(data);
     setShowConfirmation(true);
   };
@@ -105,14 +107,10 @@ export default function SignupPage() {
           />
         </label>
 
-        {/* <button
-          type="submit"
-          //   className="mt-4 w-full bg-[var(--color-charcoal)] text-white rounded-md py-3 text-sm font-semibold hover:bg-gray-900 transition"
-          className="flex items-center justify-center gap-2 py-3 px-6 rounded-2xl bg-brand-primary text-white font-bold text-sm hover:scale-[1.02] active:scale-95 transition-all"
+        {errorMessage && (
+          <p className="text-sm text-red-600 mt-1">{errorMessage}</p>
+        )}
 
-        >
-          Create Aaccount
-        </button> */}
         <PrimaryButton onClick={handleCreateAccount}>Sign up</PrimaryButton>
       </form>
 
