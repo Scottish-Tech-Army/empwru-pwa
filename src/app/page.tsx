@@ -5,11 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Goal,
-  getGoals,
-  isOnboardingCompleted,
   hasCheckedInThisWeek,
   getMomentumDays,
   isDiscoveryPopulated,
+  loadGoalsFromSupabase,
 } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 
@@ -48,12 +47,25 @@ export default function DashboardPage() {
   const [hasHydrated, setHasHydrated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [showCheckInPrompt, setShowCheckInPrompt] = useState(false);
   const [momentum, setMomentum] = useState(0);
   const [isDiscoveryEmpty, setIsDiscoveryEmpty] = useState(false);
   const [displayName, setDisplayName] = useState("User");
+
+  const refreshDashboardData = async () => {
+    try {
+      const loadedGoals = await loadGoalsFromSupabase();
+      setGoals(loadedGoals);
+    } catch (error) {
+      console.error("Failed to refresh dashboard goals", error);
+      setGoals([]);
+    }
+
+    setShowCheckInPrompt(!hasCheckedInThisWeek());
+    setMomentum(getMomentumDays());
+    setIsDiscoveryEmpty(!isDiscoveryPopulated());
+  };
 
   useEffect(() => {
     let isActive = true;
@@ -84,29 +96,35 @@ export default function DashboardPage() {
         await supabase.auth.updateUser({ data: { display_name: derivedName } });
       }
 
-      const complete = isOnboardingCompleted();
-      setOnboardingComplete(complete);
-
-      if (complete) {
-        setGoals(getGoals());
-        setShowCheckInPrompt(!hasCheckedInThisWeek());
-        setMomentum(getMomentumDays());
-        setIsDiscoveryEmpty(!isDiscoveryPopulated());
-      } else {
-        setGoals([]);
-        setShowCheckInPrompt(false);
-        setMomentum(0);
-        setIsDiscoveryEmpty(false);
-      }
-
+      await refreshDashboardData();
       setHasHydrated(true);
       setAuthChecked(true);
     }
 
     void initialize();
 
+    const handleGoalDataChanged = () => {
+      if (isActive) {
+        void refreshDashboardData();
+      }
+    };
+
+    window.addEventListener("empwru-goals-updated", handleGoalDataChanged);
+    window.addEventListener("focus", handleGoalDataChanged);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        handleGoalDataChanged();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
       isActive = false;
+      window.removeEventListener("empwru-goals-updated", handleGoalDataChanged);
+      window.removeEventListener("focus", handleGoalDataChanged);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [router]);
 
@@ -120,11 +138,11 @@ export default function DashboardPage() {
   }
 
   const activeGoals = goals.filter((g) => g.status === "active");
-  const totalSteps = goals.reduce(
+  const totalSteps = activeGoals.reduce(
     (sum, g) => sum + g.steps.length,
     0
   );
-  const completedSteps = goals.reduce(
+  const completedSteps = activeGoals.reduce(
     (sum, g) => sum + g.steps.filter((s) => s.completed).length,
     0
   );
@@ -147,7 +165,7 @@ export default function DashboardPage() {
               <GreetingIcon className="w-8 h-8 text-brand-primary" />
               {greeting}
             </h1>
-            <p className="text-text-muted mt-1">Step into your potential</p>
+            <p className="text-text-muted mt-1">Hi {displayName} — step into your potential</p>
           </div>
           <UserInitialsBadge />
         </div>
@@ -216,7 +234,7 @@ export default function DashboardPage() {
                   {activeGoals.length}
                 </p>
                 <p className="text-xs text-text-subtle mt-2">
-                  {activeGoals.length === 0 ? "Set your first goal" : "In progress"}
+                  {activeGoals.length === 0 ? "No goals in progress" : "In progress"}
                 </p>
               </div>
 
@@ -259,7 +277,7 @@ export default function DashboardPage() {
                 <section className="mb-6">
                   <div className="flex items-center justify-between mb-4 mx-4">
                     <h2 className="text-sm text-text-muted uppercase tracking-wider font-bold">
-                      Your Goals
+                      Your goals
                     </h2>
                     <Link
                       href="/goals"
@@ -268,19 +286,26 @@ export default function DashboardPage() {
                       View all →
                     </Link>
                   </div>
-                  <div className="grid grid-cols-1 gap-4">
-                    {activeGoals.slice(0, 5).map((goal) => (
-                      <GoalCard key={goal.id} goal={goal} />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {activeGoals.map((goal) => (
+                      <div key={goal.id} className="h-full">
+                        <GoalCard goal={goal} />
+                      </div>
                     ))}
-                    {activeGoals.length > 5 && (
-                      <Link
-                        href="/goals"
-                        className="block text-center text-sm text-text-muted py-2 hover:text-brand-primary transition-colors"
-                      >
-                        +{activeGoals.length - 5} more goal
-                        {activeGoals.length - 5 !== 1 ? "s" : ""}
-                      </Link>
-                    )}
+                    <Link
+                      href="/goals/new"
+                      className="min-h-[140px] rounded-2xl border-2 border-dashed border-gray-200 bg-white/70 p-4 flex flex-col items-center justify-center text-center hover:border-brand-primary hover:bg-brand-primary/5 transition-colors"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-brand-primary/10 text-brand-primary flex items-center justify-center mb-3">
+                        <Plus className="w-6 h-6" />
+                      </div>
+                      <span className="font-semibold text-[var(--color-charcoal)]">
+                        Add another goal
+                      </span>
+                      <span className="text-sm text-text-muted mt-1">
+                        Keep your momentum going
+                      </span>
+                    </Link>
                   </div>
                 </section>
               ) : (
@@ -288,25 +313,11 @@ export default function DashboardPage() {
                 <section className="flex-1 flex flex-col mb-8">
                   <DottedEmptyState
                     href="/goals/new"
-                    title="Set your first goal"
-                    description="Start with something meaningful to you and track your journey to potential."
+                    title="No goals in progress yet"
+                    description="Start a new goal and keep your momentum going."
                     icon={Plus}
                     className="flex-1 h-full"
                   />
-                </section>
-              )}
-
-              {/* Quick Action: Add Goal (if some goals exist) */}
-              {activeGoals.length > 0 && activeGoals.length < 3 && (
-                <section>
-                  <Link href="/goals/new">
-                    <div className="border-2 border-dashed border-warm-ivory rounded-2xl p-4 text-center hover:border-brand-primary hover:bg-brand-primary/5 transition-colors flex items-center justify-center gap-2">
-                      <Plus className="w-5 h-5 text-text-subtle" />
-                      <span className="text-text-muted hover:text-brand-primary">
-                        Add another goal
-                      </span>
-                    </div>
-                  </Link>
                 </section>
               )}
             </div>
