@@ -21,6 +21,7 @@ export { default as GoalSort } from "./ui/GoalSort";
 export { Tooltip } from "./ui/Tooltip";
 export { GoalProgressCard } from "./ui/GoalProgressCard";
 export { TextAreaField } from "./ui/TextAreaField";
+export { PasswordInput } from "./ui/PasswordInput";
 export { StepHeader } from "./ui/StepHeader";
 export { StepInput } from "./ui/StepInput";
 export { StepItem } from "./ui/StepItem";
