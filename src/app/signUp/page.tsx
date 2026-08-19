@@ -12,23 +12,39 @@ export default function SignupPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [showConfirmation, setShowConfirmation] = useState(false);
 
   const handleCreateAccount = async () => {
+    if (password !== confirmPassword) {
+      setErrorMessage("Passwords do not match.");
+      return;
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
     });
 
     if (error) {
-      setErrorMessage(error.message ?? "Unable to create account. Please try again.");
+      setErrorMessage(
+        error.message ?? "Unable to create account. Please try again.",
+      );
       return;
     }
 
     setErrorMessage("");
     console.log(data);
-    setShowConfirmation(true);
+    if (data.session) {
+      // Email confirmation is NOT required.
+      // User is already signed in.
+      router.push("/signIn");
+    } else if (data.user) {
+      // Email confirmation IS required.
+      // Show "Check your email" popup.
+      setShowConfirmation(true);
+    }
   };
 
   return (
@@ -106,6 +122,17 @@ export default function SignupPage() {
           />
         </label>
 
+        <label className="block text-base text-text-muted">
+          Confirm password
+          <PasswordInput
+            placeholder="Re-enter your password"
+            required
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
+        </label>
+
         {errorMessage && (
           <p className="text-sm text-red-600 mt-1">{errorMessage}</p>
         )}
@@ -136,8 +163,12 @@ export default function SignupPage() {
       {showConfirmation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4">
           <div className="w-full max-w-sm rounded-[32px] bg-white p-6 text-center shadow-[0_25px_60px_rgba(0,0,0,0.12)] ring-1 ring-black/10">
-            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[var(--color-magenta)]">Confirmation sent</p>
-            <h2 className="mt-4 text-2xl font-bold text-[var(--color-charcoal)]">Check your inbox</h2>
+            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[var(--color-magenta)]">
+              Confirmation sent
+            </p>
+            <h2 className="mt-4 text-2xl font-bold text-[var(--color-charcoal)]">
+              Check your inbox
+            </h2>
             <p className="mt-3 text-sm leading-7 text-[rgba(3,3,3,0.75)]">
               A confirmation email has been sent to your email address.
             </p>
