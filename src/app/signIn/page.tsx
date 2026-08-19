@@ -1,6 +1,6 @@
 "use client";
 
-import { PrimaryButton } from "@/components";
+import { PasswordInput, PrimaryButton } from "@/components";
 import { LoginButton } from "@/components/auth/LoginButton";
 import Image from "next/image";
 import Link from "next/link";
@@ -95,13 +95,12 @@ export default function SignupPage() {
 
         <label className="block text-base text-text-muted">
           Password
-          <input
-            type="password"
-            placeholder="Create a password"
+          <PasswordInput
+            placeholder="Enter your password"
             required
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-2 block w-full rounded-md border border-gray-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
           />
         </label>
 
