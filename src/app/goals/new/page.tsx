@@ -41,6 +41,8 @@ type GoalCreationStep =
   | "steps"
   | "done";
 
+const todayISO = new Date().toISOString().split("T")[0];
+
 interface StepDraft {
   title: string;
   targetDate?: string;
@@ -521,6 +523,7 @@ export default function NewGoalPage() {
                     <input
                       type="date"
                       value={draft.targetDate}
+                      min={todayISO}
                       onChange={(e) => updateDraft("targetDate", e.target.value)}
                       className="w-full h-14 px-5 pl-14 rounded-2xl bg-gray-50 border-none focus:outline-none focus:ring-2 focus:ring-brand-primary/40 text-gray-900 text-base appearance-none cursor-pointer"
                     />
