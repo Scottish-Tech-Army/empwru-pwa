@@ -175,7 +175,16 @@ export default function PillarDetailPage() {
   const handleSave = () => {
     if (!pillarKey) return;
     saveDiscoveryData({ [pillarKey]: items });
-    setIsDone(true);
+
+    const hasNewItems = items.some(
+      item => !initialItems.some(i => i.toLowerCase() === item.toLowerCase())
+    );
+
+    if (hasNewItems) {
+      setIsDone(true);
+    } else {
+      router.push("/discovery");
+    }
   };
 
   const isDirty = JSON.stringify([...items].sort()) !== JSON.stringify([...initialItems].sort());
