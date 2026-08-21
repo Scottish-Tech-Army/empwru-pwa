@@ -44,6 +44,8 @@ import { FullScreenLayout } from "@/components/layouts/FullScreenLayout";
 import BottomSheet from "@/components/ui/BottomSheet";
 import { CelebrationScreen } from "@/components/ui/CelebrationScreen";
 
+const todayISO = new Date().toISOString().split("T")[0];
+
 export default function GoalDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -521,6 +523,7 @@ export default function GoalDetailPage() {
                               <input
                                 type="date"
                                 value={editingDate}
+                                min={todayISO}
                                 onChange={(e) => setEditingDate(e.target.value)}
                                 className="text-xs border-none focus:outline-none focus:ring-2 focus:ring-brand-primary/40 p-0 bg-transparent flex-1 cursor-pointer font-bold rounded"
                               />
@@ -637,6 +640,7 @@ export default function GoalDetailPage() {
                         <input
                           type="date"
                           value={newStepDate}
+                          min={todayISO}
                           onChange={(e) => setNewStepDate(e.target.value)}
                           className="text-xs border-none focus:outline-none focus:ring-2 focus:ring-brand-primary/40 p-0 bg-transparent flex-1 cursor-pointer font-bold rounded"
                         />
@@ -926,6 +930,7 @@ export default function GoalDetailPage() {
               <input
                 type="date"
                 value={editTargetDate}
+                min={todayISO}
                 onChange={(e) => setEditTargetDate(e.target.value)}
                 className="flex-1 bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-brand-primary/40 text-gray-900 font-bold text-lg rounded"
               />

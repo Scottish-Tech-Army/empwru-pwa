@@ -15,6 +15,7 @@ export function StepInput({
   const [title, setTitle] = useState("");
   const [targetDate, setTargetDate] = useState("");
   const [showDate, setShowDate] = useState(false);
+  const todayISO = new Date().toISOString().split("T")[0];
 
   const handleAdd = () => {
     if (title.trim()) {
@@ -54,6 +55,7 @@ export function StepInput({
               <input
                 type="date"
                 value={targetDate}
+                min={todayISO}
                 onChange={(e) => setTargetDate(e.target.value)}
                 className="flex-1 text-base border-none focus:outline-none focus:ring-2 focus:ring-[var(--color-magenta)]/40 p-0 text-gray-700 bg-transparent cursor-pointer rounded"
               />
