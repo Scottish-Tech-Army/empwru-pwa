@@ -691,15 +691,15 @@ export default function GoalDetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 animate-in fade-in duration-300">
           <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(false)} />
           <div className="relative bg-white rounded-[40px] p-10 max-w-sm w-full text-center animate-in zoom-in-95 duration-300">
-            <div className="w-24 h-24 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-8">
-              <AlertCircle className="w-12 h-12 text-red-500" />
+            <div className="w-24 h-24 bg-brand-primary/10 rounded-full flex items-center justify-center mx-auto mb-8">
+              <AlertCircle className="w-12 h-12 text-brand-primary" />
             </div>
             <h2 className="text-3xl font-black text-gray-900 mb-3 tracking-tight">Delete Goal?</h2>
             <p className="text-gray-500 mb-10 leading-relaxed text-sm">This will permanently remove this goal and all its progress. This cannot be undone.</p>
             <div className="space-y-3">
               <button
                 onClick={handleDeleteGoal}
-                className="w-full bg-red-500 text-white py-5 rounded-full font-bold active:scale-95 transition-transform"
+                className="w-full bg-brand-primary text-white py-5 rounded-full font-bold active:scale-95 transition-transform"
               >
                 YES, DELETE GOAL
               </button>

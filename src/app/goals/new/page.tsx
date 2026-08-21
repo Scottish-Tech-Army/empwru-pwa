@@ -122,6 +122,7 @@ const CATEGORY_CONTENT: Record<GoalCategory, {
 export default function NewGoalPage() {
   const router = useRouter();
   const [step, setStep] = useState<GoalCreationStep>("intro");
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [draft, setDraft] = useState<FullGoalDraft>({
     title: "",
     category: "Career",
@@ -156,6 +157,26 @@ export default function NewGoalPage() {
     const prevStep = STEPS_ORDER[currentIndex - 1];
     if (prevStep) setStep(prevStep);
     else router.back();
+  };
+
+  const hasUnsavedInput = () => {
+    return (
+      step !== "intro" ||
+      draft.title.trim().length > 0 ||
+      draft.whyMatters.trim().length > 0 ||
+      draft.successCriteria.trim().length > 0 ||
+      draft.confidence !== null ||
+      draft.targetDate.length > 0 ||
+      draft.steps.length > 0
+    );
+  };
+
+  const handleCancelClick = () => {
+    if (hasUnsavedInput()) {
+      setShowCancelConfirm(true);
+    } else {
+      router.back();
+    }
   };
 
   const handleSave = () => {
@@ -596,7 +617,7 @@ export default function NewGoalPage() {
           </button>
 
           <button
-            onClick={() => router.back()}
+            onClick={handleCancelClick}
             className="flex flex-col items-center justify-center w-full h-full text-brand-primary transition-colors gap-1"
           >
             <div className="w-12 h-12 bg-brand-primary/10 rounded-full flex items-center justify-center mb-1 group-active:scale-95 transition-transform">
@@ -622,6 +643,33 @@ export default function NewGoalPage() {
           </button>
         </div>
       </nav>
+
+      {showCancelConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowCancelConfirm(false)} />
+          <div className="relative bg-white rounded-[40px] p-10 max-w-sm w-full text-center animate-in zoom-in-95 duration-300">
+            <div className="w-24 h-24 bg-brand-primary/10 rounded-full flex items-center justify-center mx-auto mb-8">
+              <AlertCircle className="w-12 h-12 text-brand-primary" />
+            </div>
+            <h2 className="text-3xl font-black text-gray-900 mb-3 tracking-tight">Cancel this goal?</h2>
+            <p className="text-gray-500 mb-10 leading-relaxed text-sm">You&apos;ll lose everything you&apos;ve entered so far. This cannot be undone.</p>
+            <div className="space-y-3">
+              <button
+                onClick={() => router.back()}
+                className="w-full bg-brand-primary text-white py-5 rounded-full font-bold active:scale-95 transition-transform"
+              >
+                YES, CANCEL GOAL
+              </button>
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                className="w-full py-5 rounded-full font-bold text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                KEEP EDITING
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </FullScreenLayout>
   );
 }
