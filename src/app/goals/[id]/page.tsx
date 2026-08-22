@@ -80,6 +80,9 @@ export default function GoalDetailPage() {
   const [showCelebration, setShowCelebration] = useState(false);
   const [showCompletionConfirm, setShowCompletionConfirm] = useState(false);
 
+  // Delete state
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const refreshGoal = useCallback(async () => {
     if (!id) return;
 
@@ -167,10 +170,19 @@ export default function GoalDetailPage() {
     refreshGoal();
   };
 
-  const handleDeleteGoal = () => {
-    if (!goal) return;
-    deleteGoal(goal.id);
-    router.push("/goals");
+  const handleDeleteGoal = async () => {
+    if (!goal || isDeleting) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteGoal(goal.id);
+      router.push("/goals");
+    } catch (error) {
+      console.error("Failed to delete goal", error);
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+      alert("Something went wrong deleting this goal. Please try again.");
+    }
   };
 
   if (!goal) return null;
@@ -693,7 +705,7 @@ export default function GoalDetailPage() {
       {/* Modals */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-6 animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowDeleteConfirm(false)} />
+          <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => !isDeleting && setShowDeleteConfirm(false)} />
           <div className="relative bg-white rounded-[40px] p-10 max-w-sm w-full text-center animate-in zoom-in-95 duration-300">
             <div className="w-24 h-24 bg-brand-primary/10 rounded-full flex items-center justify-center mx-auto mb-8">
               <AlertCircle className="w-12 h-12 text-brand-primary" />
@@ -703,11 +715,13 @@ export default function GoalDetailPage() {
             <div className="space-y-3">
               <button
                 onClick={handleDeleteGoal}
-                className="w-full bg-brand-primary text-white py-5 rounded-full font-bold active:scale-95 transition-transform"
+                disabled={isDeleting}
+                className="w-full bg-brand-primary text-white py-5 rounded-full font-bold active:scale-95 transition-transform disabled:opacity-60"
               >
                 YES, DELETE GOAL
               </button>
               <button
+                disabled={isDeleting}
                 onClick={() => setShowDeleteConfirm(false)}
                 className="w-full py-5 rounded-full font-bold text-gray-400 hover:text-gray-600 transition-colors"
               >

@@ -346,12 +346,10 @@ export async function loadGoalsFromSupabase(): Promise<Goal[]> {
   const remoteGoals = (data ?? []).map((row) => mapGoalFromSupabase(row as Record<string, unknown>));
   console.debug("loadGoalsFromSupabase: userId=", userId, "rows=", (data ?? []).length, "mapped=", remoteGoals.length);
 
-  if (remoteGoals.length > 0) {
-    saveGoals(remoteGoals);
-    return remoteGoals;
-  }
-
-  return [];
+  // Always mirror the remote result locally, including empty results —
+  // otherwise a deleted-down-to-zero goal list leaves a stale cached goal behind.
+  saveGoals(remoteGoals);
+  return remoteGoals;
 }
 
 export async function loadGoalByIdFromSupabase(id: string): Promise<Goal | null> {
@@ -464,9 +462,12 @@ export function updateGoal(id: string, updates: Partial<Goal>): Goal | null {
 }
 
 /**
- * Delete a goal
+ * Delete a goal. Removes it locally immediately, then awaits the remote
+ * delete so callers can navigate only once Supabase is consistent —
+ * otherwise a subsequent loadGoalsFromSupabase() can re-fetch the
+ * not-yet-deleted row and resurrect it into localStorage.
  */
-export function deleteGoal(id: string): boolean {
+export async function deleteGoal(id: string): Promise<boolean> {
   const goals = getGoals();
   const filtered = goals.filter((g) => g.id !== id);
 
@@ -475,7 +476,22 @@ export function deleteGoal(id: string): boolean {
   saveGoals(filtered);
 
   if (isBrowser()) {
-    void supabase.from("goals").delete().eq("id", id);
+    const userId = await getCurrentUserId();
+    if (userId) {
+      const { error } = await supabase
+        .from("goals")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId);
+
+      if (error) {
+        console.error("Failed to delete goal from Supabase", error);
+        // Roll back the optimistic local removal so a retry actually
+        // re-attempts the remote delete instead of silently no-op'ing.
+        saveGoals(goals);
+        throw error;
+      }
+    }
   }
 
   return true;
