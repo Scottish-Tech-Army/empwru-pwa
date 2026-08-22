@@ -20,6 +20,7 @@ export const STORAGE_KEYS = {
   PREFERENCES: `${STORAGE_PREFIX}preferences`,
   DAILY_QUOTE: "empwru_daily_quote", // Standardized name
   DISCOVERY: `${STORAGE_PREFIX}discovery`,
+  AICOACH_WELCOME_SEEN: `${STORAGE_PREFIX}aicoach_welcome_seen`,
 } as const;
 
 // Onboarding state
@@ -85,6 +86,22 @@ export function isOnboardingCompleted(): boolean {
  */
 export function completeOnboarding(): void {
   saveOnboardingState({ completed: true });
+}
+
+/**
+ * Check if the AI Coach welcome intro has already been shown
+ */
+export function hasSeenAiCoachWelcome(): boolean {
+  if (!isBrowser()) return false;
+  return localStorage.getItem(STORAGE_KEYS.AICOACH_WELCOME_SEEN) === "true";
+}
+
+/**
+ * Mark the AI Coach welcome intro as shown, so it doesn't reappear
+ */
+export function markAiCoachWelcomeSeen(): void {
+  if (!isBrowser()) return;
+  localStorage.setItem(STORAGE_KEYS.AICOACH_WELCOME_SEEN, "true");
 }
 
 /**
