@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { use, useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Target, X } from "lucide-react";
+import { Clock, Target, X } from "lucide-react";
 import { PrimaryButton } from "@/components";
 import { createGoal, generateId, type GoalCategory } from "@/lib/storage";
 
@@ -32,7 +32,7 @@ const GOAL_CATEGORIES: GoalCategory[] = [
 async function askEm(
   message: string,
   history: ChatMessage[]
-): Promise<{ text: string; options: string[] }> {
+): Promise<{ text: string; options: string[]; chatLimitReached: boolean }> {
   const res = await fetch("/api/aicoach", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -44,12 +44,20 @@ async function askEm(
       res.status === 401
         ? "You'll need to sign in for me to give you personalised coaching."
         : "Sorry, something went wrong on my end. Mind trying that again?";
-    return { text, options: [] };
+    return { text, options: [], chatLimitReached: false };
   }
 
-  const data = (await res.json()) as { reply?: string; options?: string[] };
+  const data = (await res.json()) as {
+    reply?: string;
+    options?: string[];
+    chatLimitReached?: boolean;
+  };
   const text = data.reply?.trim() || "Sorry, I didn't quite catch that — could you rephrase?";
-  return { text, options: Array.isArray(data.options) ? data.options : [] };
+  return {
+    text,
+    options: Array.isArray(data.options) ? data.options : [],
+    chatLimitReached: Boolean(data.chatLimitReached),
+  };
 }
 
 async function extractGoal(
@@ -93,12 +101,14 @@ export default function ChatPage({ params }: { params: Promise<{ prompt: string 
   ]);
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const hasSentInitialPrompt = useRef(false);
+  const hasInitialized = useRef(false);
 
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [draft, setDraft] = useState<ExtractedGoalDraft | null>(null);
   const [savedGoalId, setSavedGoalId] = useState<string | null>(null);
+  const [chatLimitReached, setChatLimitReached] = useState(false);
+  const [goalExtractLimitReached, setGoalExtractLimitReached] = useState(false);
 
   useEffect(() => {
     window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
@@ -111,38 +121,72 @@ export default function ChatPage({ params }: { params: Promise<{ prompt: string 
     addMessage({ role: "user", text });
     setIsSending(true);
 
-    const { text: replyText, options } = await askEm(text, historyForRequest);
+    const { text: replyText, options, chatLimitReached: limitReached } = await askEm(text, historyForRequest);
     addMessage({ role: "assistant", text: replyText, options });
     setIsSending(false);
+    setChatLimitReached(limitReached);
   };
 
+  // Checks today's usage first, then decides whether to auto-send the
+  // tapped prompt — the two are sequenced (not two independent effects) so
+  // an already-known limit can skip the real /api/aicoach round trip
+  // entirely instead of firing it and getting the canned rejection back.
   useEffect(() => {
-    if (!decodedPrompt || hasSentInitialPrompt.current) return;
-    hasSentInitialPrompt.current = true;
+    if (hasInitialized.current) return;
+    hasInitialized.current = true;
 
-    const greeting: ChatMessage[] = [
-      { role: "assistant", text: "Hi — I’m Em, your AI coach." },
-    ];
-    setMessages(greeting);
-    void sendUserMessage(decodedPrompt, greeting);
+    async function initialize() {
+      let chatAlreadyReached = false;
+
+      const res = await fetch("/api/aicoach/usage");
+      if (res.ok) {
+        const data = (await res.json()) as {
+          chatLimitReached?: boolean;
+          goalExtractLimitReached?: boolean;
+        };
+        chatAlreadyReached = Boolean(data.chatLimitReached);
+        if (chatAlreadyReached) setChatLimitReached(true);
+        if (data.goalExtractLimitReached) setGoalExtractLimitReached(true);
+      }
+
+      if (!decodedPrompt) return;
+
+      const greeting: ChatMessage[] = [
+        { role: "assistant", text: "Hi — I’m Em, your AI coach." },
+      ];
+
+      if (chatAlreadyReached) {
+        setMessages([
+          ...greeting,
+          { role: "user", text: decodedPrompt },
+          { role: "assistant", text: "That's a good place to pause for today.", options: [] },
+        ]);
+        return;
+      }
+
+      setMessages(greeting);
+      await sendUserMessage(decodedPrompt, greeting);
+    }
+
+    void initialize();
   }, [decodedPrompt]);
 
   const handleSend = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const trimmed = inputValue.trim();
-    if (!trimmed || isSending) return;
+    if (!trimmed || isSending || chatLimitReached) return;
 
     setInputValue("");
     await sendUserMessage(trimmed);
   };
 
   const handleOptionClick = (option: string) => {
-    if (isSending) return;
+    if (isSending || chatLimitReached) return;
     void sendUserMessage(option);
   };
 
   const handleExtractGoal = async () => {
-    if (isSending || isExtracting) return;
+    if (isSending || isExtracting || goalExtractLimitReached) return;
     setIsExtracting(true);
     setExtractError(null);
 
@@ -152,6 +196,9 @@ export default function ChatPage({ params }: { params: Promise<{ prompt: string 
     } else {
       setExtractError(error ?? "Sorry, something went wrong pulling that together.");
     }
+    // The daily extraction slot is spent on any attempt, success or not —
+    // matches the server, which claims the slot before calling Gemini.
+    setGoalExtractLimitReached(true);
     setIsExtracting(false);
   };
 
@@ -239,8 +286,13 @@ export default function ChatPage({ params }: { params: Promise<{ prompt: string 
                 const isAssistant = message.role === "assistant";
                 const isLatest = index === messages.length - 1;
                 const showOptions =
-                  isAssistant && isLatest && !isSending && (message.options?.length ?? 0) > 0;
-                const showGoalTrigger = isAssistant && isLatest && !isSending && !draft && hasConversation;
+                  isAssistant &&
+                  isLatest &&
+                  !isSending &&
+                  !chatLimitReached &&
+                  (message.options?.length ?? 0) > 0;
+                const showGoalTrigger =
+                  isAssistant && isLatest && !isSending && !draft && hasConversation && !chatLimitReached;
 
                 return (
                   <div key={`${message.role}-${index}`} className="space-y-2">
@@ -297,11 +349,15 @@ export default function ChatPage({ params }: { params: Promise<{ prompt: string 
                         <button
                           type="button"
                           onClick={handleExtractGoal}
-                          disabled={isExtracting}
+                          disabled={isExtracting || goalExtractLimitReached}
                           className="inline-flex items-center gap-2 rounded-full bg-brand-gradient px-4 py-2 text-xs font-semibold text-white shadow-[0_4px_12px_rgba(188,3,185,0.25)] transition hover:scale-[1.02] disabled:opacity-60"
                         >
                           <Target className="h-3.5 w-3.5" />
-                          {isExtracting ? "Pulling this together…" : "Turn this into a goal"}
+                          {isExtracting
+                            ? "Pulling this together…"
+                            : goalExtractLimitReached
+                            ? "Already used today"
+                            : "Turn this into a goal"}
                         </button>
                         {extractError && (
                           <p className="mt-2 text-xs text-red-500">{extractError}</p>
@@ -431,23 +487,49 @@ export default function ChatPage({ params }: { params: Promise<{ prompt: string 
           </div>
         </div>
 
-        <form onSubmit={handleSend} className="mt-6 space-y-4">
-          <input
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Type your message to Em..."
-            disabled={isSending}
-            className="w-full rounded-full border border-gray-200 bg-white px-5 py-4 text-sm text-[var(--color-charcoal)] outline-none transition focus:border-[var(--color-magenta)] focus:ring-2 focus:ring-[var(--color-magenta)]/20 disabled:opacity-60"
-          />
-          <PrimaryButton
-            type="submit"
-            fullWidth={true}
-            disabled={isSending}
-            className="w-full rounded-full py-4 text-base disabled:opacity-60"
-          >
-            {isSending ? "Sending…" : "Send"}
-          </PrimaryButton>
-        </form>
+        {chatLimitReached && !draft ? (
+          <div className="mt-6 rounded-[28px] bg-[var(--color-bg-card)] p-6 text-center">
+            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-brand-gradient">
+              <Clock className="h-[18px] w-[18px] text-white" />
+            </div>
+            <p className="text-sm font-semibold text-[var(--color-charcoal)]">That&apos;s today&apos;s chats</p>
+            <p className="mx-auto mt-1 max-w-xs text-xs leading-6 text-[var(--color-text-muted)]">
+              {goalExtractLimitReached
+                ? "Come back tomorrow for more."
+                : "Come back tomorrow for more — or turn this conversation into a goal so it doesn't go to waste."}
+            </p>
+            {!goalExtractLimitReached && (
+              <button
+                type="button"
+                onClick={handleExtractGoal}
+                disabled={isExtracting}
+                className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-gradient px-5 py-3 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(188,3,185,0.25)] transition hover:scale-[1.02] disabled:opacity-60"
+              >
+                <Target className="h-4 w-4" />
+                {isExtracting ? "Pulling this together…" : "Turn this into a goal"}
+              </button>
+            )}
+            {extractError && <p className="mt-3 text-xs text-red-500">{extractError}</p>}
+          </div>
+        ) : chatLimitReached && draft ? null : (
+          <form onSubmit={handleSend} className="mt-6 space-y-4">
+            <input
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              placeholder="Type your message to Em..."
+              disabled={isSending}
+              className="w-full rounded-full border border-gray-200 bg-white px-5 py-4 text-sm text-[var(--color-charcoal)] outline-none transition focus:border-[var(--color-magenta)] focus:ring-2 focus:ring-[var(--color-magenta)]/20 disabled:opacity-60"
+            />
+            <PrimaryButton
+              type="submit"
+              fullWidth={true}
+              disabled={isSending}
+              className="w-full rounded-full py-4 text-base disabled:opacity-60"
+            >
+              {isSending ? "Sending…" : "Send"}
+            </PrimaryButton>
+          </form>
+        )}
       </div>
     </div>
   );

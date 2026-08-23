@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { AI_COACH_MOCK, buildContextBlock, fetchAiCoachContext } from "@/lib/aicoach-context";
+import {
+  AI_COACH_MOCK,
+  buildContextBlock,
+  checkAndIncrementChatUsage,
+  fetchAiCoachContext,
+} from "@/lib/aicoach-context";
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -50,6 +55,24 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
+  console.log("[aicoach] AI_COACH_MOCK =", AI_COACH_MOCK);
+
+  // Usage is checked/incremented against the real DB even in mock mode, so
+  // the daily-limit behaviour itself can be tested locally without burning
+  // Gemini quota — only the actual model call below is skipped for mock.
+  const usage = await checkAndIncrementChatUsage(supabase, user.id);
+  console.log("[aicoach] chat usage for", user.id, "=", usage);
+  if (!usage.allowed) {
+    console.log("[aicoach] chat limit reached — returning canned reply, skipping Gemini");
+    return NextResponse.json({
+      reply: "That's a good place to pause for today.",
+      options: [],
+      chatLimitReached: true,
+    });
+  }
+  const chatLimitReached = usage.chatCount >= usage.limit;
+  console.log("[aicoach] chatLimitReached after this message =", chatLimitReached);
+
   const { goals, discovery } = await fetchAiCoachContext(supabase, user.id);
   const contextBlock = buildContextBlock(goals, discovery);
 
@@ -61,6 +84,7 @@ export async function POST(req: Request) {
         "What should I focus on this week",
         "I want to talk about something else",
       ],
+      chatLimitReached,
     });
   }
 
@@ -88,7 +112,7 @@ export async function POST(req: Request) {
         ? (parsed.options as string[]).slice(0, 4)
         : [];
 
-    return NextResponse.json({ reply, options });
+    return NextResponse.json({ reply, options, chatLimitReached });
   } catch (error) {
     console.error("AI Coach request failed", error);
     return NextResponse.json({ error: "Failed to get a response" }, { status: 500 });

@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import {
   AI_COACH_MOCK,
   buildContextBlock,
+  checkAndIncrementChatUsage,
   fetchAiCoachContext,
   hasAiCoachContext,
 } from "@/lib/aicoach-context";
@@ -47,8 +48,19 @@ export async function GET() {
   // back to its generic template instead of spending a model call on it.
   if (!hasAiCoachContext(goals, discovery)) {
     console.log("[aicoach/prompts] no context found — falling back to generic prompts");
-    return NextResponse.json({ prompts: null });
+    return NextResponse.json({ prompts: null, chatLimitReached: false });
   }
+
+  // Personalising the landing page is itself an AI Coach query, so it draws
+  // from the same daily chat budget as regular chat turns — checked and
+  // claimed against the real DB even in mock mode, matching /api/aicoach.
+  const usage = await checkAndIncrementChatUsage(supabase, user.id);
+  console.log("[aicoach/prompts] chat usage for", user.id, "=", usage);
+  if (!usage.allowed) {
+    console.log("[aicoach/prompts] chat limit reached — skipping Gemini, no prompts");
+    return NextResponse.json({ prompts: null, chatLimitReached: true });
+  }
+  const chatLimitReached = usage.chatCount >= usage.limit;
 
   const contextBlock = buildContextBlock(goals, discovery);
   console.log("[aicoach/prompts] context block sent to model:\n", contextBlock);
@@ -62,6 +74,7 @@ export async function GET() {
         "[mock] I'm feeling stuck today",
         "[mock] Let's talk about my strengths",
       ],
+      chatLimitReached,
     });
   }
 
@@ -95,9 +108,9 @@ export async function GET() {
 
     console.log("[aicoach/prompts] resolved prompts:", prompts);
 
-    return NextResponse.json({ prompts });
+    return NextResponse.json({ prompts, chatLimitReached });
   } catch (error) {
     console.error("[aicoach/prompts] AI Coach prompt generation failed", error);
-    return NextResponse.json({ prompts: null });
+    return NextResponse.json({ prompts: null, chatLimitReached });
   }
 }
