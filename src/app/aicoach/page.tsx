@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Compass, Flame, Lightbulb, Target } from "lucide-react";
+import { Clock, Compass, Flame, Lightbulb, Target } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { PrimaryButton } from "@/components";
 import { useRouter } from "next/navigation";
@@ -18,12 +18,17 @@ const GENERIC_PROMPTS = [
   "I want to discuss an idea",
 ];
 
-async function fetchPersonalizedPrompts(): Promise<string[] | null> {
+async function fetchPersonalizedPrompts(): Promise<{
+  prompts: string[] | null;
+  chatLimitReached: boolean;
+}> {
   const res = await fetch("/api/aicoach/prompts");
-  if (!res.ok) return null;
+  if (!res.ok) return { prompts: null, chatLimitReached: false };
 
-  const data = (await res.json()) as { prompts?: unknown };
-  return Array.isArray(data.prompts) && data.prompts.length === 4 ? (data.prompts as string[]) : null;
+  const data = (await res.json()) as { prompts?: unknown; chatLimitReached?: boolean };
+  const prompts =
+    Array.isArray(data.prompts) && data.prompts.length === 4 ? (data.prompts as string[]) : null;
+  return { prompts, chatLimitReached: Boolean(data.chatLimitReached) };
 }
 
 // Toggle this to true to only allow selecting from the predefined prompts
@@ -59,6 +64,7 @@ export default function AiCoachPage() {
   const [displayName, setDisplayName] = useState("there");
   const [promptOptions, setPromptOptions] = useState<string[]>(GENERIC_PROMPTS);
   const [isLoadingPrompts, setIsLoadingPrompts] = useState(true);
+  const [chatLimitReached, setChatLimitReached] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -82,10 +88,11 @@ export default function AiCoachPage() {
     hasFetchedPrompts.current = true;
 
     async function loadPersonalizedPrompts() {
-      const prompts = await fetchPersonalizedPrompts();
+      const { prompts, chatLimitReached: limitReached } = await fetchPersonalizedPrompts();
       // null covers both "brand-new user" and "generation failed" — either
       // way, keep the generic template already set as the default state.
       if (prompts) setPromptOptions(prompts);
+      setChatLimitReached(limitReached);
       setIsLoadingPrompts(false);
     }
 
@@ -208,6 +215,8 @@ export default function AiCoachPage() {
               <p className="mx-auto max-w-2xl text-sm leading-7 text-[rgba(3,3,3,0.7)] sm:text-base">
                 {isLoadingPrompts
                   ? "Getting a few ideas ready for you…"
+                  : chatLimitReached
+                  ? "You've used today's chats with Em."
                   : ONLY_PREDEFINED
                   ? "Pick one of the quick prompts to start a helpful conversation."
                   : "Pick one of the quick prompts to start a helpful conversation, or type your own question below."}
@@ -215,35 +224,47 @@ export default function AiCoachPage() {
             </div>
           </div>
 
-          <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
-            {isLoadingPrompts
-              ? Array.from({ length: 4 }).map((_, index) => (
-                  <div
-                    key={index}
-                    className="flex w-full animate-pulse items-center gap-3 rounded-3xl border border-[var(--color-magenta)]/10 bg-[var(--color-bg-card)] px-4 py-4"
-                  >
-                    <span className="h-9 w-9 flex-shrink-0 rounded-xl bg-[var(--color-magenta)]/10" />
-                    <span className="h-3 flex-1 rounded-full bg-[var(--color-magenta)]/10" />
-                  </div>
-                ))
-              : promptOptions.map((prompt, index) => {
-                  const TileIcon = TILE_ICONS[index % TILE_ICONS.length];
-
-                  return (
-                    <button
-                      key={prompt}
-                      type="button"
-                      onClick={() => handlePromptClick(prompt)}
-                      className="flex w-full items-center gap-3 rounded-3xl border border-[var(--color-magenta)]/15 bg-[linear-gradient(135deg,rgba(74,15,126,0.06)_0%,rgba(188,3,185,0.06)_45%,rgba(242,115,33,0.06)_100%)] px-4 py-4 text-left text-sm text-[var(--color-charcoal)] transition hover:scale-[1.01]"
+          {!isLoadingPrompts && chatLimitReached ? (
+            <div className="mt-8 rounded-[28px] bg-[var(--color-bg-card)] p-6 text-center">
+              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-brand-gradient">
+                <Clock className="h-[18px] w-[18px] text-white" />
+              </div>
+              <p className="text-sm font-semibold text-[var(--color-charcoal)]">That&apos;s today&apos;s chats</p>
+              <p className="mx-auto mt-1 max-w-xs text-xs leading-6 text-[var(--color-text-muted)]">
+                Come back tomorrow for more time with Em.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-2">
+              {isLoadingPrompts
+                ? Array.from({ length: 4 }).map((_, index) => (
+                    <div
+                      key={index}
+                      className="flex w-full animate-pulse items-center gap-3 rounded-3xl border border-[var(--color-magenta)]/10 bg-[var(--color-bg-card)] px-4 py-4"
                     >
-                      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-brand-gradient">
-                        <TileIcon className="h-4 w-4 text-white" />
-                      </span>
-                      <span>{prompt}</span>
-                    </button>
-                  );
-                })}
-          </div>
+                      <span className="h-9 w-9 flex-shrink-0 rounded-xl bg-[var(--color-magenta)]/10" />
+                      <span className="h-3 flex-1 rounded-full bg-[var(--color-magenta)]/10" />
+                    </div>
+                  ))
+                : promptOptions.map((prompt, index) => {
+                    const TileIcon = TILE_ICONS[index % TILE_ICONS.length];
+
+                    return (
+                      <button
+                        key={prompt}
+                        type="button"
+                        onClick={() => handlePromptClick(prompt)}
+                        className="flex w-full items-center gap-3 rounded-3xl border border-[var(--color-magenta)]/15 bg-[linear-gradient(135deg,rgba(74,15,126,0.06)_0%,rgba(188,3,185,0.06)_45%,rgba(242,115,33,0.06)_100%)] px-4 py-4 text-left text-sm text-[var(--color-charcoal)] transition hover:scale-[1.01]"
+                      >
+                        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-brand-gradient">
+                          <TileIcon className="h-4 w-4 text-white" />
+                        </span>
+                        <span>{prompt}</span>
+                      </button>
+                    );
+                  })}
+            </div>
+          )}
 
           {!ONLY_PREDEFINED ? (<div className="mt-10 space-y-5">
             <div className="rounded-[28px] bg-[var(--color-bg-card)] p-4 shadow-sm">

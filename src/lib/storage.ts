@@ -255,20 +255,11 @@ async function getCurrentUserId(): Promise<string | null> {
   if (!isBrowser()) return null;
 
   try {
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError) {
-      console.error("Unable to read Supabase user", userError);
-      return null;
-    }
-
-    if (user?.id) {
-      return user.id;
-    }
-
+    // getSession() reads the already-cached client-side session and simply
+    // returns null when logged out. auth.getUser() forces a server
+    // revalidation instead, and throws AuthSessionMissingError when there's
+    // no session — noisy for callers like this one that just want to know
+    // "is anyone signed in right now" for local/Supabase sync bookkeeping.
     const {
       data: { session },
       error: sessionError,

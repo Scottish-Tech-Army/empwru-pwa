@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { AI_COACH_MOCK } from "@/lib/aicoach-context";
+import { AI_COACH_MOCK, checkAndIncrementGoalExtractUsage } from "@/lib/aicoach-context";
 
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -54,6 +54,17 @@ export async function POST(req: Request) {
 
   if (!user) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  // Usage is checked/incremented against the real DB even in mock mode, so
+  // the daily-limit behaviour itself can be tested locally without burning
+  // Gemini quota — only the actual model call below is skipped for mock.
+  const usage = await checkAndIncrementGoalExtractUsage(supabase, user.id);
+  if (!usage.allowed) {
+    return NextResponse.json(
+      { error: "You've already turned a conversation into a goal today — come back tomorrow for another." },
+      { status: 429 }
+    );
   }
 
   if (AI_COACH_MOCK) {
