@@ -82,7 +82,7 @@ export async function POST(req: Request) {
 
   try {
     const response = await genAI.models.generateContent({
-      model: "gemini-3.6-flash",
+      model: "gemini-2.5-flash",
       config: {
         systemInstruction: EXTRACT_GOAL_SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
