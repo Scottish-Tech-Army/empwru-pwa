@@ -80,7 +80,7 @@ export async function GET() {
 
   try {
     const response = await genAI.models.generateContent({
-      model: "gemini-3.6-flash",
+      model: "gemini-2.5-flash",
       config: {
         systemInstruction: PROMPTS_SYSTEM_INSTRUCTION,
         responseMimeType: "application/json",
