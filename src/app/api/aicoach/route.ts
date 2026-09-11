@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import {
   AI_COACH_MOCK,
@@ -7,8 +6,7 @@ import {
   checkAndIncrementChatUsage,
   fetchAiCoachContext,
 } from "@/lib/aicoach-context";
-
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+import { generateAiCoachJson, type ChatTurn } from "@/lib/aicoach-provider";
 
 const EM_PERSONA = `You are Em, empwrU's AI coach for women rebuilding confidence and momentum
 after a coaching programme. Voice: warm, honest, grounded, confident, a little playful —
@@ -22,18 +20,26 @@ next to keep the conversation going, written in the user's own voice (first pers
 under 12 words each, no exclamation marks. Base them on what you just said and on the
 user's actual goals/context, never generic filler.`;
 
-interface ChatTurn {
-  role: "user" | "assistant";
-  text: string;
-}
-
-const CHAT_RESPONSE_SCHEMA = {
+const CHAT_RESPONSE_GEMINI_SCHEMA = {
   type: "object",
   properties: {
     reply: { type: "string" },
     options: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 4 },
   },
   required: ["reply", "options"],
+};
+
+// Claude's structured-outputs dialect requires additionalProperties:false and
+// doesn't support min/maxItems — the 2-4 option count stays enforced by the
+// prompt text instead.
+const CHAT_RESPONSE_CLAUDE_SCHEMA = {
+  type: "object",
+  properties: {
+    reply: { type: "string" },
+    options: { type: "array", items: { type: "string" } },
+  },
+  required: ["reply", "options"],
+  additionalProperties: false,
 };
 
 export async function POST(req: Request) {
@@ -59,11 +65,11 @@ export async function POST(req: Request) {
 
   // Usage is checked/incremented against the real DB even in mock mode, so
   // the daily-limit behaviour itself can be tested locally without burning
-  // Gemini quota — only the actual model call below is skipped for mock.
+  // model quota — only the actual model call below is skipped for mock.
   const usage = await checkAndIncrementChatUsage(supabase, user.id);
   console.log("[aicoach] chat usage for", user.id, "=", usage);
   if (!usage.allowed) {
-    console.log("[aicoach] chat limit reached — returning canned reply, skipping Gemini");
+    console.log("[aicoach] chat limit reached — returning canned reply, skipping model call");
     return NextResponse.json({
       reply: "That's a good place to pause for today.",
       options: [],
@@ -78,7 +84,7 @@ export async function POST(req: Request) {
 
   if (AI_COACH_MOCK) {
     return NextResponse.json({
-      reply: `[mock] You said: "${message.trim()}". Here's a placeholder coaching reply so you can check the UI without calling Gemini.`,
+      reply: `[mock] You said: "${message.trim()}". Here's a placeholder coaching reply so you can check the UI without calling the model.`,
       options: [
         "Tell me more about that",
         "What should I focus on this week",
@@ -89,24 +95,15 @@ export async function POST(req: Request) {
   }
 
   try {
-    const response = await genAI.models.generateContent({
-      model: "gemini-2.5-flash",
-      config: {
-        systemInstruction: `${EM_PERSONA}\n\n${contextBlock}`,
-        responseMimeType: "application/json",
-        responseJsonSchema: CHAT_RESPONSE_SCHEMA,
-      },
-      contents: [
-        ...(history ?? []).map((turn) => ({
-          role: turn.role === "assistant" ? "model" : "user",
-          parts: [{ text: turn.text }],
-        })),
-        { role: "user", parts: [{ text: message }] },
-      ],
+    const responseText = await generateAiCoachJson({
+      systemInstruction: `${EM_PERSONA}\n\n${contextBlock}`,
+      contents: [...(history ?? []), { role: "user", text: message }],
+      geminiSchema: CHAT_RESPONSE_GEMINI_SCHEMA,
+      claudeSchema: CHAT_RESPONSE_CLAUDE_SCHEMA,
     });
 
-    const parsed = JSON.parse(response.text ?? "{}") as { reply?: unknown; options?: unknown };
-    const reply = typeof parsed.reply === "string" ? parsed.reply : response.text ?? "";
+    const parsed = JSON.parse(responseText) as { reply?: unknown; options?: unknown };
+    const reply = typeof parsed.reply === "string" ? parsed.reply : responseText;
     const options =
       Array.isArray(parsed.options) && parsed.options.every((o) => typeof o === "string")
         ? (parsed.options as string[]).slice(0, 4)

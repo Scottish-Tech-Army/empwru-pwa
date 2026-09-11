@@ -42,3 +42,7 @@ next-env.d.ts
 
 # claude files
 CLAUDE.md
+
+# local design-mockup previews (Claude-generated, not part of the app)
+/.local-previews
+

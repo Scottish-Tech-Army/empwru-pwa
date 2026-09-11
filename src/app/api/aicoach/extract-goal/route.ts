@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AI_COACH_MOCK, checkAndIncrementGoalExtractUsage } from "@/lib/aicoach-context";
-
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+import { generateAiCoachJson, type ChatTurn } from "@/lib/aicoach-provider";
 
 const GOAL_CATEGORIES = [
   "Wellbeing",
@@ -24,7 +22,7 @@ whyMatters: one or two sentences on why this matters to the user, written in fir
 as if the user is saying it.
 steps: 3-6 concrete, ordered action steps the user could actually take, short phrases.`;
 
-const EXTRACT_GOAL_SCHEMA = {
+const EXTRACT_GOAL_GEMINI_SCHEMA = {
   type: "object",
   properties: {
     title: { type: "string" },
@@ -35,10 +33,20 @@ const EXTRACT_GOAL_SCHEMA = {
   required: ["title", "category", "whyMatters", "steps"],
 };
 
-interface ChatTurn {
-  role: "user" | "assistant";
-  text: string;
-}
+// Claude's structured-outputs dialect requires additionalProperties:false and
+// doesn't support min/maxItems — the 3-6 step count stays enforced by the
+// prompt text instead.
+const EXTRACT_GOAL_CLAUDE_SCHEMA = {
+  type: "object",
+  properties: {
+    title: { type: "string" },
+    category: { type: "string", enum: GOAL_CATEGORIES },
+    whyMatters: { type: "string" },
+    steps: { type: "array", items: { type: "string" } },
+  },
+  required: ["title", "category", "whyMatters", "steps"],
+  additionalProperties: false,
+};
 
 export async function POST(req: Request) {
   const { history } = (await req.json()) as { history?: ChatTurn[] };
@@ -58,7 +66,7 @@ export async function POST(req: Request) {
 
   // Usage is checked/incremented against the real DB even in mock mode, so
   // the daily-limit behaviour itself can be tested locally without burning
-  // Gemini quota — only the actual model call below is skipped for mock.
+  // model quota — only the actual model call below is skipped for mock.
   const usage = await checkAndIncrementGoalExtractUsage(supabase, user.id);
   if (!usage.allowed) {
     return NextResponse.json(
@@ -81,22 +89,16 @@ export async function POST(req: Request) {
     .join("\n");
 
   try {
-    const response = await genAI.models.generateContent({
-      model: "gemini-2.5-flash",
-      config: {
-        systemInstruction: EXTRACT_GOAL_SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseJsonSchema: EXTRACT_GOAL_SCHEMA,
-      },
+    const responseText = await generateAiCoachJson({
+      systemInstruction: EXTRACT_GOAL_SYSTEM_INSTRUCTION,
       contents: [
-        {
-          role: "user",
-          parts: [{ text: `Conversation:\n${transcript}\n\nExtract the goal now.` }],
-        },
+        { role: "user", text: `Conversation:\n${transcript}\n\nExtract the goal now.` },
       ],
+      geminiSchema: EXTRACT_GOAL_GEMINI_SCHEMA,
+      claudeSchema: EXTRACT_GOAL_CLAUDE_SCHEMA,
     });
 
-    const parsed = JSON.parse(response.text ?? "{}") as {
+    const parsed = JSON.parse(responseText) as {
       title?: unknown;
       category?: unknown;
       whyMatters?: unknown;

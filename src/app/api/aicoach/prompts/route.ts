@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import {
   AI_COACH_MOCK,
@@ -8,8 +7,7 @@ import {
   fetchAiCoachContext,
   hasAiCoachContext,
 } from "@/lib/aicoach-context";
-
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+import { generateAiCoachJson } from "@/lib/aicoach-provider";
 
 const PROMPTS_SYSTEM_INSTRUCTION = `You write conversation-starter suggestions for Em, empwrU's AI coach.
 Each suggestion is a short sentence the USER would say to Em to open a coaching conversation —
@@ -17,7 +15,7 @@ not something Em would say back. Base each one on the specific goal, strength, o
 never write a generic prompt that could apply to any user. Under 12 words each, first person,
 warm but plain British English — no jargon, no exclamation marks.`;
 
-const PROMPTS_RESPONSE_SCHEMA = {
+const PROMPTS_RESPONSE_GEMINI_SCHEMA = {
   type: "object",
   properties: {
     prompts: {
@@ -28,6 +26,18 @@ const PROMPTS_RESPONSE_SCHEMA = {
     },
   },
   required: ["prompts"],
+};
+
+// Claude's structured-outputs dialect requires additionalProperties:false and
+// doesn't support min/maxItems — the "exactly 4" count stays enforced by the
+// prompt text instead.
+const PROMPTS_RESPONSE_CLAUDE_SCHEMA = {
+  type: "object",
+  properties: {
+    prompts: { type: "array", items: { type: "string" } },
+  },
+  required: ["prompts"],
+  additionalProperties: false,
 };
 
 export async function GET() {
@@ -57,7 +67,7 @@ export async function GET() {
   const usage = await checkAndIncrementChatUsage(supabase, user.id);
   console.log("[aicoach/prompts] chat usage for", user.id, "=", usage);
   if (!usage.allowed) {
-    console.log("[aicoach/prompts] chat limit reached — skipping Gemini, no prompts");
+    console.log("[aicoach/prompts] chat limit reached — skipping model call, no prompts");
     return NextResponse.json({ prompts: null, chatLimitReached: true });
   }
   const chatLimitReached = usage.chatCount >= usage.limit;
@@ -66,7 +76,7 @@ export async function GET() {
   console.log("[aicoach/prompts] context block sent to model:\n", contextBlock);
 
   if (AI_COACH_MOCK) {
-    console.log("[aicoach/prompts] AI_COACH_MOCK on — skipping Gemini call");
+    console.log("[aicoach/prompts] AI_COACH_MOCK on — skipping model call");
     return NextResponse.json({
       prompts: [
         "[mock] I want to talk about my top goal",
@@ -79,28 +89,21 @@ export async function GET() {
   }
 
   try {
-    const response = await genAI.models.generateContent({
-      model: "gemini-2.5-flash",
-      config: {
-        systemInstruction: PROMPTS_SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        responseJsonSchema: PROMPTS_RESPONSE_SCHEMA,
-      },
+    const responseText = await generateAiCoachJson({
+      systemInstruction: PROMPTS_SYSTEM_INSTRUCTION,
       contents: [
         {
           role: "user",
-          parts: [
-            {
-              text: `${contextBlock}\n\nWrite exactly 4 conversation-starter suggestions based on this.`,
-            },
-          ],
+          text: `${contextBlock}\n\nWrite exactly 4 conversation-starter suggestions based on this.`,
         },
       ],
+      geminiSchema: PROMPTS_RESPONSE_GEMINI_SCHEMA,
+      claudeSchema: PROMPTS_RESPONSE_CLAUDE_SCHEMA,
     });
 
-    console.log("[aicoach/prompts] raw model response.text:", response.text);
+    console.log("[aicoach/prompts] raw model response text:", responseText);
 
-    const parsed = JSON.parse(response.text ?? "{}") as { prompts?: unknown };
+    const parsed = JSON.parse(responseText) as { prompts?: unknown };
     const prompts =
       Array.isArray(parsed.prompts) && parsed.prompts.every((p) => typeof p === "string")
         ? (parsed.prompts as string[]).slice(0, 4)

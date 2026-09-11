@@ -45,11 +45,18 @@ export async function fetchAiCoachContext(supabase: SupabaseServerClient, userId
   return { goals, discovery };
 }
 
-// Daily budget: 5 total AI Coach requests/day — 4 regular chat turns, with
-// the 5th slot reserved specifically for turning the conversation into a
-// goal, so a user can never chat their way through the whole budget and be
-// left with no way to save what they talked about.
-const DAILY_CHAT_LIMIT = 4;
+// Daily chat budget, read from AICOACH_DAILY_LIMIT (defaults to 5 if unset or
+// invalid). Goal extraction has its own small fixed allowance, separate from
+// this value, so a user can never chat their way through the whole budget
+// and be left with no way to save what they talked about.
+const DEFAULT_DAILY_LIMIT = 5;
+
+function resolveDailyChatLimit(): number {
+  const raw = Number(process.env.AICOACH_DAILY_LIMIT);
+  return Number.isInteger(raw) && raw > 0 ? raw : DEFAULT_DAILY_LIMIT;
+}
+
+const DAILY_CHAT_LIMIT = resolveDailyChatLimit();
 const DAILY_GOAL_EXTRACT_LIMIT = 1;
 
 function todayDateString(): string {
