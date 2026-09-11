@@ -11,6 +11,7 @@ type ChatMessage = {
   role: "assistant" | "user";
   text: string;
   options?: string[];
+  isError?: boolean;
 };
 
 type ExtractedGoalDraft = {
@@ -32,7 +33,7 @@ const GOAL_CATEGORIES: GoalCategory[] = [
 async function askEm(
   message: string,
   history: ChatMessage[]
-): Promise<{ text: string; options: string[]; chatLimitReached: boolean }> {
+): Promise<{ text: string; options: string[]; chatLimitReached: boolean; isError: boolean }> {
   const res = await fetch("/api/aicoach", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -44,7 +45,7 @@ async function askEm(
       res.status === 401
         ? "You'll need to sign in for me to give you personalised coaching."
         : "Sorry, something went wrong on my end. Mind trying that again?";
-    return { text, options: [], chatLimitReached: false };
+    return { text, options: [], chatLimitReached: false, isError: true };
   }
 
   const data = (await res.json()) as {
@@ -57,6 +58,7 @@ async function askEm(
     text,
     options: Array.isArray(data.options) ? data.options : [],
     chatLimitReached: Boolean(data.chatLimitReached),
+    isError: false,
   };
 }
 
@@ -121,8 +123,8 @@ export default function ChatPage({ params }: { params: Promise<{ prompt: string 
     addMessage({ role: "user", text });
     setIsSending(true);
 
-    const { text: replyText, options, chatLimitReached: limitReached } = await askEm(text, historyForRequest);
-    addMessage({ role: "assistant", text: replyText, options });
+    const { text: replyText, options, chatLimitReached: limitReached, isError } = await askEm(text, historyForRequest);
+    addMessage({ role: "assistant", text: replyText, options, isError });
     setIsSending(false);
     setChatLimitReached(limitReached);
   };
@@ -292,7 +294,13 @@ export default function ChatPage({ params }: { params: Promise<{ prompt: string 
                   !chatLimitReached &&
                   (message.options?.length ?? 0) > 0;
                 const showGoalTrigger =
-                  isAssistant && isLatest && !isSending && !draft && hasConversation && !chatLimitReached;
+                  isAssistant &&
+                  isLatest &&
+                  !isSending &&
+                  !draft &&
+                  hasConversation &&
+                  !chatLimitReached &&
+                  !message.isError;
 
                 return (
                   <div key={`${message.role}-${index}`} className="space-y-2">
