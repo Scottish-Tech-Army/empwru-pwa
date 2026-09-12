@@ -12,6 +12,27 @@ function getInitialsFromEmail(email: string | null | undefined) {
   return derived.toUpperCase();
 }
 
+function getInitialsFromSession(
+  session: { user: { user_metadata?: Record<string, unknown>; email?: string | null } } | null | undefined,
+) {
+  const firstName = session?.user.user_metadata?.first_name;
+  const lastName = session?.user.user_metadata?.last_name;
+  const firstInitial =
+    typeof firstName === "string" ? firstName.trim().charAt(0) : "";
+  const lastInitial =
+    typeof lastName === "string" ? lastName.trim().charAt(0) : "";
+  const combined = `${firstInitial}${lastInitial}`;
+
+  if (combined) return combined.toUpperCase();
+
+  const metadataName = session?.user.user_metadata?.display_name;
+  if (typeof metadataName === "string" && metadataName) {
+    return metadataName.slice(0, 2).toUpperCase();
+  }
+
+  return getInitialsFromEmail(session?.user.email);
+}
+
 export default function UserInitialsBadge() {
   const router = useRouter();
   const [initials, setInitials] = useState("U");
@@ -27,11 +48,7 @@ export default function UserInitialsBadge() {
 
       if (!isActive) return;
 
-      const metadataName = session?.user.user_metadata?.display_name;
-      const fallback = getInitialsFromEmail(session?.user.email);
-      const nextInitials = (metadataName ? String(metadataName).slice(0, 2) : fallback).toUpperCase();
-
-      setInitials(nextInitials || "U");
+      setInitials(getInitialsFromSession(session) || "U");
     }
 
     void initialize();
@@ -41,11 +58,7 @@ export default function UserInitialsBadge() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isActive) return;
 
-      const metadataName = session?.user.user_metadata?.display_name;
-      const fallback = getInitialsFromEmail(session?.user.email);
-      const nextInitials = (metadataName ? String(metadataName).slice(0, 2) : fallback).toUpperCase();
-
-      setInitials(nextInitials || "U");
+      setInitials(getInitialsFromSession(session) || "U");
     });
 
     return () => {

@@ -243,6 +243,71 @@ environment gets it from the start.
 
 ---
 
+## `checkins`
+
+Backs the weekly check-in wizard and the progress dashboard's "proud of" /
+"learning" memories (`src/lib/storage.ts` — `saveCheckIn`,
+`syncCheckInToSupabase`, `loadCheckInsFromSupabase`, `toggleCheckInLike`).
+
+Not yet created in the live Supabase project — unlike the tables above, this
+one has never been exported from the dashboard, so treat the DDL below as
+code-inferred and authoritative for what to create, not a confirmed export.
+Follows the same shape as `goals` (multi-row per user, client-generated
+`text` id from `generateId()`), since a user accrues many check-ins over
+time rather than one aggregate row.
+
+`liked_achievement` / `liked_reflection` are the heart-icon "save this as a
+memory" flags shown on the progress page — modeled as columns on the
+check-in row itself (1:1 with an existing check-in) rather than a separate
+likes table, so there's no possibility of an orphaned reference. Sync is
+forward-only: check-ins created before this table existed stay local-only on
+whichever device/browser created them and are not backfilled.
+
+```sql
+create table if not exists public.checkins (
+  id text primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  date text not null,
+  energy_level integer not null,
+  achievements text,
+  reflection text,
+  steps_completed jsonb not null default '[]'::jsonb,
+  liked_achievement boolean not null default false,
+  liked_reflection boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists checkins_user_id_idx on public.checkins (user_id);
+create index if not exists checkins_created_at_idx on public.checkins (created_at desc);
+
+alter table public.checkins enable row level security;
+
+create policy "Users can view their own checkins"
+  on public.checkins for select
+  using (auth.uid() = user_id);
+
+create policy "Users can insert their own checkins"
+  on public.checkins for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update their own checkins"
+  on public.checkins for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "Users can delete their own checkins"
+  on public.checkins for delete
+  using (auth.uid() = user_id);
+```
+
+`date` mirrors `goals.target_date`'s convention of storing a plain ISO-date
+string rather than a native `date` column. `steps_completed` holds the
+legacy `stepsCompleted`/`milestonesCompleted` string-id array from the
+`CheckIn` type — not currently populated by the check-in wizard UI, but kept
+so existing local data round-trips through Supabase without loss.
+
+---
+
 ## Adding a new table
 
 Follow the same shape as above for anything new:

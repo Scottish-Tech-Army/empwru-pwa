@@ -1,23 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import BottomNav from "@/components/ui/BottomNav";
-import { getCheckIns, getProgressLikes, toggleProgressLike } from "@/lib/storage";
+import { CheckIn, getCheckIns, loadCheckInsFromSupabase, toggleCheckInLike } from "@/lib/storage";
 import { ChevronLeft, Sparkles, Heart } from "lucide-react";
 
 export default function LearningsPage() {
   const router = useRouter();
-  const [likes, setLikes] = useState(() =>
-    typeof window !== "undefined" ? getProgressLikes() : { achievements: [], reflection: [] }
+  const [checkIns, setCheckIns] = useState<CheckIn[]>(() =>
+    typeof window !== "undefined" ? getCheckIns() : []
   );
 
-  const checkIns = typeof window !== "undefined" ? getCheckIns() : [];
-  const learningCheckIns = checkIns.filter((c) => likes.reflection.includes(c.id));
+  useEffect(() => {
+    let isMounted = true;
+
+    loadCheckInsFromSupabase()
+      .then((remoteCheckIns) => {
+        if (isMounted) setCheckIns(remoteCheckIns);
+      })
+      .catch((error) => console.error("Failed to load check-ins from Supabase", error));
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const learningCheckIns = checkIns.filter((c) => c.likedReflection);
 
   const handleToggle = (id: string) => {
-    const updated = toggleProgressLike("reflection", id);
-    setLikes(updated);
+    setCheckIns(toggleCheckInLike("reflection", id));
   };
 
   return (

@@ -11,8 +11,8 @@ import {
   getGoals,
   getLastCheckIn,
   getMomentumDays,
-  getProgressLikes,
-  toggleProgressLike,
+  loadCheckInsFromSupabase,
+  toggleCheckInLike,
   hasCheckedInThisWeek,
   CheckIn,
   Goal,
@@ -98,26 +98,38 @@ export default function ProgressPage() {
   const [baseline] = useState<BaselineResponse>(() => 
     typeof window !== 'undefined' ? getBaselineResponse() : {}
   );
-  const [checkIns] = useState<CheckIn[]>(() => 
+  const [checkIns, setCheckIns] = useState<CheckIn[]>(() =>
     typeof window !== 'undefined' ? getCheckIns() : []
   );
-  const [goals] = useState<Goal[]>(() => 
+  const [goals] = useState<Goal[]>(() =>
     typeof window !== 'undefined' ? getGoals() : []
   );
-  const [momentum] = useState(() => 
+  const [momentum, setMomentum] = useState(() =>
     typeof window !== 'undefined' ? getMomentumDays() : 0
   );
-  const [checkInDue] = useState(() => 
+  const [checkInDue, setCheckInDue] = useState(() =>
     typeof window !== 'undefined' ? !hasCheckedInThisWeek() : false
-  );
-  const [progressLikes, setProgressLikes] = useState(() =>
-    typeof window !== "undefined" ? getProgressLikes() : { achievements: [], reflection: [] }
   );
   const thisWeekCheckIn = !checkInDue ? getLastCheckIn() : null;
   const [celebrationDismissed, setCelebrationDismissed] = useState(false);
   const [period, setPeriod] = useState<"week" | "month" | "year">("week");
 
+  useEffect(() => {
+    let isMounted = true;
 
+    loadCheckInsFromSupabase()
+      .then((remoteCheckIns) => {
+        if (!isMounted) return;
+        setCheckIns(remoteCheckIns);
+        setCheckInDue(!hasCheckedInThisWeek());
+        setMomentum(getMomentumDays());
+      })
+      .catch((error) => console.error("Failed to load check-ins from Supabase", error));
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Calculate stats
   const completedGoals = goals.filter((g) => g.status === "completed");
@@ -134,11 +146,11 @@ export default function ProgressPage() {
   }, {} as Record<GoalCategory, number>);
   const topCategory = (Object.entries(goalCategoryCounts).sort((a, b) => b[1] - a[1])[0]?.[0] as GoalCategory) || null;
 
-  const likedProuds = checkIns.filter((c) => progressLikes.achievements.includes(c.id));
-  const likedLearnings = checkIns.filter((c) => progressLikes.reflection.includes(c.id));
+  const likedProuds = checkIns.filter((c) => c.likedAchievement);
+  const likedLearnings = checkIns.filter((c) => c.likedReflection);
 
   const toggleLike = (type: "achievements" | "reflection", checkInId: string) =>
-    setProgressLikes(toggleProgressLike(type, checkInId));
+    setCheckIns(toggleCheckInLike(type, checkInId));
 
   // Get recent energy levels from check-ins
   const recentCheckIns = [...checkIns]
@@ -390,17 +402,17 @@ export default function ProgressPage() {
                           <button
                             onClick={() => thisWeekCheckIn && toggleLike("achievements", thisWeekCheckIn.id)}
                             className={`absolute top-3 right-3 p-1 rounded-full transition-colors ${
-                              thisWeekCheckIn && progressLikes.achievements.includes(thisWeekCheckIn.id)
+                              thisWeekCheckIn?.likedAchievement
                                 ? "text-brand-primary"
                                 : "text-gray-300 hover:text-gray-400"
                             }`}
                             aria-label="Save proud moment"
                           >
-                            <Heart 
-                              className="w-5 h-5" 
-                              fill={thisWeekCheckIn && progressLikes.achievements.includes(thisWeekCheckIn.id) ? "url(#heartGradient)" : "none"}
-                              stroke={thisWeekCheckIn && progressLikes.achievements.includes(thisWeekCheckIn.id) ? "url(#heartGradient)" : "currentColor"}
-                              strokeWidth={thisWeekCheckIn && progressLikes.achievements.includes(thisWeekCheckIn.id) ? 0 : 2}
+                            <Heart
+                              className="w-5 h-5"
+                              fill={thisWeekCheckIn?.likedAchievement ? "url(#heartGradient)" : "none"}
+                              stroke={thisWeekCheckIn?.likedAchievement ? "url(#heartGradient)" : "currentColor"}
+                              strokeWidth={thisWeekCheckIn?.likedAchievement ? 0 : 2}
                             />
                           </button>
 
@@ -414,17 +426,17 @@ export default function ProgressPage() {
                           <button
                             onClick={() => thisWeekCheckIn && toggleLike("reflection", thisWeekCheckIn.id)}
                             className={`absolute top-3 right-3 p-1 rounded-full transition-colors ${
-                              thisWeekCheckIn && progressLikes.reflection.includes(thisWeekCheckIn.id)
+                              thisWeekCheckIn?.likedReflection
                                 ? "text-brand-primary"
                                 : "text-gray-300 hover:text-gray-400"
                             }`}
                             aria-label="Save learning"
                           >
-                            <Heart 
-                              className="w-5 h-5" 
-                              fill={thisWeekCheckIn && progressLikes.reflection.includes(thisWeekCheckIn.id) ? "url(#heartGradient)" : "none"}
-                              stroke={thisWeekCheckIn && progressLikes.reflection.includes(thisWeekCheckIn.id) ? "url(#heartGradient)" : "currentColor"}
-                              strokeWidth={thisWeekCheckIn && progressLikes.reflection.includes(thisWeekCheckIn.id) ? 0 : 2}
+                            <Heart
+                              className="w-5 h-5"
+                              fill={thisWeekCheckIn?.likedReflection ? "url(#heartGradient)" : "none"}
+                              stroke={thisWeekCheckIn?.likedReflection ? "url(#heartGradient)" : "currentColor"}
+                              strokeWidth={thisWeekCheckIn?.likedReflection ? 0 : 2}
                             />
                           </button>
 

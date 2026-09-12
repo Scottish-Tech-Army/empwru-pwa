@@ -10,11 +10,14 @@ import { supabase } from "@/lib/supabase";
 
 export default function SignupPage() {
   const router = useRouter();
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
 
   const handleCreateAccount = async () => {
     if (password !== confirmPassword) {
@@ -22,9 +25,18 @@ export default function SignupPage() {
       return;
     }
 
+    const displayName = `${firstName.trim()} ${lastName.trim()}`.trim();
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          display_name: displayName,
+        },
+      },
     });
 
     if (error) {
@@ -38,8 +50,9 @@ export default function SignupPage() {
     console.log(data);
     if (data.session) {
       // Email confirmation is NOT required.
-      // User is already signed in.
-      router.push("/signIn");
+      // User is already signed in. Show a success popup before sending
+      // them to sign in.
+      setShowSuccess(true);
     } else if (data.user) {
       // Email confirmation IS required.
       // Show "Check your email" popup.
@@ -99,6 +112,32 @@ export default function SignupPage() {
         }}
         className="w-full max-w-sm flex flex-col gap-6"
       >
+        <div className="flex gap-4">
+          <label className="block flex-1 text-base text-text-muted">
+            First name
+            <input
+              type="text"
+              placeholder="First name"
+              required
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              className="mt-2 block w-full rounded-md border border-gray-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
+            />
+          </label>
+
+          <label className="block flex-1 text-base text-text-muted">
+            Last name
+            <input
+              type="text"
+              placeholder="Last name"
+              required
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              className="mt-2 block w-full rounded-md border border-gray-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
+            />
+          </label>
+        </div>
+
         <label className="block text-base text-text-muted">
           Email
           <input
@@ -159,6 +198,33 @@ export default function SignupPage() {
         </Link>
         .
       </p>
+
+      {showSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4">
+          <div className="w-full max-w-sm rounded-[32px] bg-white p-6 text-center shadow-[0_25px_60px_rgba(0,0,0,0.12)] ring-1 ring-black/10">
+            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[var(--color-magenta)]">
+              Account created
+            </p>
+            <h2 className="mt-4 text-2xl font-bold text-[var(--color-charcoal)]">
+              You&apos;re all set
+            </h2>
+            <p className="mt-3 text-sm leading-7 text-[rgba(3,3,3,0.75)]">
+              Your account has been created successfully. Sign in to get
+              started.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setShowSuccess(false);
+                router.push("/signIn");
+              }}
+              className="mt-6 w-full rounded-2xl bg-brand-primary px-6 py-3 text-sm font-semibold text-white transition hover:bg-brand-primary/90"
+            >
+              Go to sign in
+            </button>
+          </div>
+        </div>
+      )}
 
       {showConfirmation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4">
