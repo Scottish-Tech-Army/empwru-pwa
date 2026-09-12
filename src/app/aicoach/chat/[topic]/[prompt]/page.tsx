@@ -3,9 +3,9 @@
 import Image from "next/image";
 import { use, useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Clock, Target, X } from "lucide-react";
+import { Clock, Compass, Target, X } from "lucide-react";
 import { PrimaryButton } from "@/components";
-import { createGoal, generateId, type GoalCategory } from "@/lib/storage";
+import { addDiscoveryItem, createGoal, generateId, type DiscoveryPillar, type GoalCategory } from "@/lib/storage";
 
 type ChatMessage = {
   role: "assistant" | "user";
@@ -21,6 +21,13 @@ type ExtractedGoalDraft = {
   steps: string[];
 };
 
+type ExtractedDiscoveryDraft = {
+  skills: string[];
+  qualities: string[];
+  values: string[];
+  interests: string[];
+};
+
 const GOAL_CATEGORIES: GoalCategory[] = [
   "Wellbeing",
   "Career",
@@ -30,14 +37,31 @@ const GOAL_CATEGORIES: GoalCategory[] = [
   "other",
 ];
 
+const DISCOVERY_PILLAR_LABELS: Record<DiscoveryPillar, string> = {
+  skills: "Skills",
+  qualities: "Qualities",
+  values: "Values",
+  interests: "Interests",
+};
+const DISCOVERY_PILLARS: DiscoveryPillar[] = ["skills", "qualities", "values", "interests"];
+
+// `remaining` is the only thing the server reports — how many of today's
+// combined AI Coach requests are left. Whether that should currently block
+// *chat* (as opposed to extraction) is a client-side judgment call, made in
+// the component below from `remaining` plus its own knowledge of whether
+// this conversation has already extracted — the server has no notion of
+// separate conversations, so it can't make that call itself.
+type UsageStatus = { remaining?: number };
+
 async function askEm(
   message: string,
-  history: ChatMessage[]
-): Promise<{ text: string; options: string[]; chatLimitReached: boolean; isError: boolean }> {
+  history: ChatMessage[],
+  topic: string
+): Promise<{ text: string; options: string[]; isError: boolean } & UsageStatus> {
   const res = await fetch("/api/aicoach", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, history }),
+    body: JSON.stringify({ message, history, topic }),
   });
 
   if (!res.ok) {
@@ -45,26 +69,22 @@ async function askEm(
       res.status === 401
         ? "You'll need to sign in for me to give you personalised coaching."
         : "Sorry, something went wrong on my end. Mind trying that again?";
-    return { text, options: [], chatLimitReached: false, isError: true };
+    return { text, options: [], isError: true };
   }
 
-  const data = (await res.json()) as {
-    reply?: string;
-    options?: string[];
-    chatLimitReached?: boolean;
-  };
+  const data = (await res.json()) as { reply?: string; options?: string[] } & UsageStatus;
   const text = data.reply?.trim() || "Sorry, I didn't quite catch that — could you rephrase?";
   return {
     text,
     options: Array.isArray(data.options) ? data.options : [],
-    chatLimitReached: Boolean(data.chatLimitReached),
     isError: false,
+    remaining: data.remaining,
   };
 }
 
 async function extractGoal(
   history: ChatMessage[]
-): Promise<{ draft?: ExtractedGoalDraft; error?: string }> {
+): Promise<{ draft?: ExtractedGoalDraft; error?: string } & UsageStatus> {
   const res = await fetch("/api/aicoach/extract-goal", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -77,10 +97,10 @@ async function extractGoal(
     whyMatters?: string;
     steps?: string[];
     error?: string;
-  };
+  } & UsageStatus;
 
   if (!res.ok || !data.title || !data.steps) {
-    return { error: data.error || "Sorry, something went wrong pulling that together." };
+    return { error: data.error || "Sorry, something went wrong pulling that together.", remaining: data.remaining };
   }
 
   return {
@@ -90,13 +110,49 @@ async function extractGoal(
       whyMatters: data.whyMatters ?? "",
       steps: data.steps,
     },
+    remaining: data.remaining,
   };
 }
 
-export default function ChatPage({ params }: { params: Promise<{ prompt: string }> }) {
+async function extractDiscovery(
+  history: ChatMessage[]
+): Promise<{ draft?: ExtractedDiscoveryDraft; error?: string } & UsageStatus> {
+  const res = await fetch("/api/aicoach/extract-discovery", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ history: history.map(({ role, text }) => ({ role, text })) }),
+  });
+
+  const data = (await res.json()) as {
+    skills?: string[];
+    qualities?: string[];
+    values?: string[];
+    interests?: string[];
+    error?: string;
+  } & UsageStatus;
+
+  if (!res.ok) {
+    return { error: data.error || "Sorry, something went wrong pulling that together.", remaining: data.remaining };
+  }
+
+  return {
+    draft: {
+      skills: data.skills ?? [],
+      qualities: data.qualities ?? [],
+      values: data.values ?? [],
+      interests: data.interests ?? [],
+    },
+    remaining: data.remaining,
+  };
+}
+
+export default function ChatPage({ params }: { params: Promise<{ topic: string; prompt: string }> }) {
   const router = useRouter();
-  const { prompt } = use(params);
+  const { topic, prompt } = use(params);
   const decodedPrompt = decodeURIComponent(prompt || "");
+  const isDiscoveryTopic = topic === "discovery";
+  const isGoalsTopic = topic === "goals";
+  const canTurnIntoAction = isDiscoveryTopic || isGoalsTopic;
 
   const [messages, setMessages] = useState<ChatMessage[]>([
     { role: "assistant", text: "Hi — I’m Em, your AI coach." },
@@ -104,29 +160,55 @@ export default function ChatPage({ params }: { params: Promise<{ prompt: string 
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const hasInitialized = useRef(false);
+  // Tracks whether *this* conversation has used its "turn into X" action.
+  // This is what decides, client-side, whether chat should still hold back
+  // the day's last request for extraction — see the note on `remaining`
+  // below.
+  const [hasExtractedThisConversation, setHasExtractedThisConversation] = useState(false);
 
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
   const [draft, setDraft] = useState<ExtractedGoalDraft | null>(null);
   const [savedGoalId, setSavedGoalId] = useState<string | null>(null);
-  const [chatLimitReached, setChatLimitReached] = useState(false);
-  const [goalExtractLimitReached, setGoalExtractLimitReached] = useState(false);
+  // How many of today's combined AI Coach requests are left (null until the
+  // first response comes back). The server enforces this as a flat cap —
+  // whether it should currently block *chat* specifically is decided below,
+  // from this number plus whether this conversation has already extracted.
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const [discoveryDraft, setDiscoveryDraft] = useState<ExtractedDiscoveryDraft | null>(null);
+  const [savedDiscovery, setSavedDiscovery] = useState(false);
+
+  // True once the shared daily pool is fully spent — nothing more is
+  // possible, chat or extraction.
+  const dailyLimitReached = remaining !== null && remaining <= 0;
+  // Chat additionally holds back the pool's last request until *this*
+  // conversation has extracted at least once, so a conversation can never
+  // burn its only remaining chance to save itself without noticing.
+  const chatLimitReached =
+    dailyLimitReached || (remaining !== null && remaining <= 1 && !hasExtractedThisConversation);
+  // Extraction was never subject to that holdback — it's the thing being
+  // held back *for* — so it's blocked only once the whole pool is gone.
+  const extractLimitReached = dailyLimitReached;
 
   useEffect(() => {
     window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-  }, [messages, isSending, draft, savedGoalId]);
+  }, [messages, isSending, draft, savedGoalId, discoveryDraft, savedDiscovery]);
 
   const addMessage = (m: ChatMessage) => setMessages((cur) => [...cur, m]);
+
+  const applyRemaining = (value: number | undefined) => {
+    if (value !== undefined) setRemaining(value);
+  };
 
   const sendUserMessage = async (text: string, historyOverride?: ChatMessage[]) => {
     const historyForRequest = historyOverride ?? messages;
     addMessage({ role: "user", text });
     setIsSending(true);
 
-    const { text: replyText, options, chatLimitReached: limitReached, isError } = await askEm(text, historyForRequest);
+    const { text: replyText, options, isError, remaining: newRemaining } = await askEm(text, historyForRequest, topic);
     addMessage({ role: "assistant", text: replyText, options, isError });
     setIsSending(false);
-    setChatLimitReached(limitReached);
+    applyRemaining(newRemaining);
   };
 
   // Checks today's usage first, then decides whether to auto-send the
@@ -142,13 +224,11 @@ export default function ChatPage({ params }: { params: Promise<{ prompt: string 
 
       const res = await fetch("/api/aicoach/usage");
       if (res.ok) {
-        const data = (await res.json()) as {
-          chatLimitReached?: boolean;
-          goalExtractLimitReached?: boolean;
-        };
-        chatAlreadyReached = Boolean(data.chatLimitReached);
-        if (chatAlreadyReached) setChatLimitReached(true);
-        if (data.goalExtractLimitReached) setGoalExtractLimitReached(true);
+        const data = (await res.json()) as UsageStatus;
+        applyRemaining(data.remaining);
+        // Fresh page, so this conversation can't have extracted yet —
+        // chatLimitReached's reservation logic above simplifies to this.
+        chatAlreadyReached = data.remaining !== undefined && data.remaining <= 1;
       }
 
       if (!decodedPrompt) return;
@@ -188,20 +268,60 @@ export default function ChatPage({ params }: { params: Promise<{ prompt: string 
   };
 
   const handleExtractGoal = async () => {
-    if (isSending || isExtracting || goalExtractLimitReached) return;
+    if (isSending || isExtracting || extractLimitReached) return;
     setIsExtracting(true);
     setExtractError(null);
+    // Set before the round trip: attempting extraction is what fulfils this
+    // conversation's reserved-slot guarantee, regardless of whether the
+    // attempt itself succeeds.
+    setHasExtractedThisConversation(true);
 
-    const { draft: newDraft, error } = await extractGoal(messages);
+    const { draft: newDraft, error, remaining: newRemaining } = await extractGoal(messages);
     if (newDraft) {
       setDraft(newDraft);
     } else {
       setExtractError(error ?? "Sorry, something went wrong pulling that together.");
     }
-    // The daily extraction slot is spent on any attempt, success or not —
-    // matches the server, which claims the slot before calling Gemini.
-    setGoalExtractLimitReached(true);
+    applyRemaining(newRemaining);
     setIsExtracting(false);
+  };
+
+  const handleExtractDiscovery = async () => {
+    if (isSending || isExtracting || extractLimitReached) return;
+    setIsExtracting(true);
+    setExtractError(null);
+    setHasExtractedThisConversation(true);
+
+    const { draft: newDraft, error, remaining: newRemaining } = await extractDiscovery(messages);
+    if (newDraft) {
+      setDiscoveryDraft(newDraft);
+    } else {
+      setExtractError(error ?? "Sorry, something went wrong pulling that together.");
+    }
+    applyRemaining(newRemaining);
+    setIsExtracting(false);
+  };
+
+  const removeDiscoveryDraftItem = (pillar: DiscoveryPillar, index: number) => {
+    setDiscoveryDraft((current) => {
+      if (!current) return current;
+      return { ...current, [pillar]: current[pillar].filter((_, i) => i !== index) };
+    });
+  };
+
+  const handleDiscardDiscoveryDraft = () => {
+    setDiscoveryDraft(null);
+    setSavedDiscovery(false);
+  };
+
+  const handleSaveDiscovery = () => {
+    if (!discoveryDraft) return;
+    for (const pillar of DISCOVERY_PILLARS) {
+      for (const item of discoveryDraft[pillar]) {
+        addDiscoveryItem(pillar, item);
+      }
+    }
+    setSavedDiscovery(true);
   };
 
   const updateDraft = (updates: Partial<ExtractedGoalDraft>) => {
@@ -253,6 +373,9 @@ export default function ChatPage({ params }: { params: Promise<{ prompt: string 
 
   const hasConversation = messages.some((m) => m.role === "user");
   const canSaveDraft = Boolean(draft?.title.trim()) && (draft?.steps.some((s) => s.trim()) ?? false);
+  const canSaveDiscoveryDraft = Boolean(
+    discoveryDraft && DISCOVERY_PILLARS.some((pillar) => discoveryDraft[pillar].length > 0)
+  );
 
   return (
     <div className="relative min-h-screen bg-slate-100 text-[var(--color-charcoal)]">
@@ -293,14 +416,16 @@ export default function ChatPage({ params }: { params: Promise<{ prompt: string 
                   !isSending &&
                   !chatLimitReached &&
                   (message.options?.length ?? 0) > 0;
-                const showGoalTrigger =
+                const showTurnIntoTrigger =
                   isAssistant &&
                   isLatest &&
                   !isSending &&
                   !draft &&
+                  !discoveryDraft &&
                   hasConversation &&
                   !chatLimitReached &&
-                  !message.isError;
+                  !message.isError &&
+                  canTurnIntoAction;
 
                 return (
                   <div key={`${message.role}-${index}`} className="space-y-2">
@@ -352,19 +477,28 @@ export default function ChatPage({ params }: { params: Promise<{ prompt: string 
                       </div>
                     )}
 
-                    {showGoalTrigger && (
+                    {showTurnIntoTrigger && (
                       <div className="pl-12">
                         <button
                           type="button"
-                          onClick={handleExtractGoal}
-                          disabled={isExtracting || goalExtractLimitReached}
+                          onClick={isDiscoveryTopic ? handleExtractDiscovery : handleExtractGoal}
+                          disabled={
+                            isExtracting ||
+                            extractLimitReached
+                          }
                           className="inline-flex items-center gap-2 rounded-full bg-brand-gradient px-4 py-2 text-xs font-semibold text-white shadow-[0_4px_12px_rgba(188,3,185,0.25)] transition hover:scale-[1.02] disabled:opacity-60"
                         >
-                          <Target className="h-3.5 w-3.5" />
+                          {isDiscoveryTopic ? (
+                            <Compass className="h-3.5 w-3.5" />
+                          ) : (
+                            <Target className="h-3.5 w-3.5" />
+                          )}
                           {isExtracting
                             ? "Pulling this together…"
-                            : goalExtractLimitReached
+                            : extractLimitReached
                             ? "Already used today"
+                            : isDiscoveryTopic
+                            ? "Turn this into discovery notes"
                             : "Turn this into a goal"}
                         </button>
                         {extractError && (
@@ -491,35 +625,124 @@ export default function ChatPage({ params }: { params: Promise<{ prompt: string 
                   )}
                 </div>
               )}
+
+              {discoveryDraft && (
+                <div className="rounded-3xl border-2 border-[var(--color-magenta)]/20 bg-white p-5 shadow-[0_10px_30px_rgba(0,0,0,0.06)]">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[var(--color-magenta)]">
+                    Discovery notes
+                  </p>
+
+                  {savedDiscovery ? (
+                    <div className="space-y-3 text-center">
+                      <p className="text-sm text-[var(--color-charcoal)]">
+                        Saved — check your Discovery hub for what&apos;s new.
+                      </p>
+                      <div className="flex justify-center gap-2">
+                        <PrimaryButton
+                          type="button"
+                          onClick={() => router.push("/discovery")}
+                          fullWidth={false}
+                          className="min-w-[120px]"
+                        >
+                          View discovery
+                        </PrimaryButton>
+                        <button
+                          type="button"
+                          onClick={handleDiscardDiscoveryDraft}
+                          className="rounded-full border border-gray-200 px-4 py-2 text-sm text-slate-500 hover:bg-slate-50"
+                        >
+                          Keep chatting
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {DISCOVERY_PILLARS.map((pillar) =>
+                        discoveryDraft[pillar].length > 0 ? (
+                          <div key={pillar}>
+                            <p className="mb-2 text-xs font-semibold text-slate-500">
+                              {DISCOVERY_PILLAR_LABELS[pillar]}
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {discoveryDraft[pillar].map((item, index) => (
+                                <span
+                                  key={`${pillar}-${index}`}
+                                  className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-magenta)]/20 bg-[var(--color-magenta)]/5 px-3 py-1.5 text-xs text-[var(--color-charcoal)]"
+                                >
+                                  {item}
+                                  <button
+                                    type="button"
+                                    onClick={() => removeDiscoveryDraftItem(pillar, index)}
+                                    className="text-slate-400 hover:text-red-500"
+                                    aria-label={`Remove ${item}`}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null
+                      )}
+
+                      <div className="flex gap-2 pt-2">
+                        <PrimaryButton
+                          type="button"
+                          onClick={handleSaveDiscovery}
+                          disabled={!canSaveDiscoveryDraft}
+                          fullWidth={true}
+                          className="flex-1 disabled:opacity-60"
+                        >
+                          Save to Discovery
+                        </PrimaryButton>
+                        <button
+                          type="button"
+                          onClick={handleDiscardDiscoveryDraft}
+                          className="rounded-full border border-gray-200 px-4 py-2 text-sm text-slate-500 hover:bg-slate-50"
+                        >
+                          Discard
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {chatLimitReached && !draft ? (
+        {chatLimitReached && !draft && !discoveryDraft ? (
           <div className="mt-6 rounded-[28px] bg-[var(--color-bg-card)] p-6 text-center">
             <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-brand-gradient">
               <Clock className="h-[18px] w-[18px] text-white" />
             </div>
             <p className="text-sm font-semibold text-[var(--color-charcoal)]">That&apos;s today&apos;s chats</p>
             <p className="mx-auto mt-1 max-w-xs text-xs leading-6 text-[var(--color-text-muted)]">
-              {goalExtractLimitReached
+              {!canTurnIntoAction ||
+              extractLimitReached
                 ? "Come back tomorrow for more."
+                : isDiscoveryTopic
+                ? "Come back tomorrow for more — or turn this conversation into discovery notes so it doesn't go to waste."
                 : "Come back tomorrow for more — or turn this conversation into a goal so it doesn't go to waste."}
             </p>
-            {!goalExtractLimitReached && (
+            {canTurnIntoAction && !extractLimitReached && (
               <button
                 type="button"
-                onClick={handleExtractGoal}
+                onClick={isDiscoveryTopic ? handleExtractDiscovery : handleExtractGoal}
                 disabled={isExtracting}
                 className="mt-4 inline-flex items-center gap-2 rounded-full bg-brand-gradient px-5 py-3 text-sm font-semibold text-white shadow-[0_4px_12px_rgba(188,3,185,0.25)] transition hover:scale-[1.02] disabled:opacity-60"
               >
-                <Target className="h-4 w-4" />
-                {isExtracting ? "Pulling this together…" : "Turn this into a goal"}
+                {isDiscoveryTopic ? <Compass className="h-4 w-4" /> : <Target className="h-4 w-4" />}
+                {isExtracting
+                  ? "Pulling this together…"
+                  : isDiscoveryTopic
+                  ? "Turn this into discovery notes"
+                  : "Turn this into a goal"}
               </button>
             )}
             {extractError && <p className="mt-3 text-xs text-red-500">{extractError}</p>}
           </div>
-        ) : chatLimitReached && draft ? null : (
+        ) : chatLimitReached && (draft || discoveryDraft) ? null : (
           <form onSubmit={handleSend} className="mt-6 space-y-4">
             <input
               value={inputValue}

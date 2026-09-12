@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Clock, Compass, Flame, Lightbulb, Target } from "lucide-react";
+import { Clock, Compass, Flame, Lightbulb, Target, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { PrimaryButton } from "@/components";
 import { useRouter } from "next/navigation";
@@ -9,33 +9,31 @@ import { supabase } from "@/lib/supabase";
 import { hasSeenAiCoachWelcome, markAiCoachWelcomeSeen } from "@/lib/storage";
 import BottomNav from "@/components/ui/BottomNav";
 
-// Shown when there's nothing yet to personalise around — a brand-new user
-// with no goals and no discovery data — or if prompt generation fails.
-const GENERIC_PROMPTS = [
-  "I want to discover what I'm good at",
-  "I want to get clear on my goals",
-  "I want to take action but feel stuck",
-  "I want to discuss an idea",
+type PromptTopic = {
+  id: "discovery" | "goals" | "stuck" | "idea";
+  label: string;
+  icon: LucideIcon;
+};
+
+// Always shown, in this order — each tile routes to a differently-flavoured
+// chat topic (see /aicoach/chat/[topic]/[prompt]).
+const PROMPT_TOPICS: PromptTopic[] = [
+  { id: "discovery", label: "Help me build self awareness and clarity", icon: Compass },
+  { id: "goals", label: "Help me with my goals", icon: Target },
+  { id: "stuck", label: "I want to take action but I feel stuck", icon: Flame },
+  { id: "idea", label: "I want to discuss an idea", icon: Lightbulb },
 ];
 
-async function fetchPersonalizedPrompts(): Promise<{
-  prompts: string[] | null;
-  chatLimitReached: boolean;
-}> {
-  const res = await fetch("/api/aicoach/prompts");
-  if (!res.ok) return { prompts: null, chatLimitReached: false };
+async function fetchChatLimitReached(): Promise<boolean> {
+  const res = await fetch("/api/aicoach/usage");
+  if (!res.ok) return false;
 
-  const data = (await res.json()) as { prompts?: unknown; chatLimitReached?: boolean };
-  const prompts =
-    Array.isArray(data.prompts) && data.prompts.length === 4 ? (data.prompts as string[]) : null;
-  return { prompts, chatLimitReached: Boolean(data.chatLimitReached) };
+  const data = (await res.json()) as { limitReached?: boolean };
+  return Boolean(data.limitReached);
 }
 
 // Toggle this to true to only allow selecting from the predefined prompts
 const ONLY_PREDEFINED = true;
-
-// Cycled by tile position — prompts are always exactly 4, generated or generic
-const TILE_ICONS = [Target, Compass, Flame, Lightbulb];
 
 type ChatMessage = {
   role: "assistant" | "user";
@@ -62,7 +60,6 @@ export default function AiCoachPage() {
   const [inputValue, setInputValue] = useState("");
   const [showWelcomeModal, setShowWelcomeModal] = useState(true);
   const [displayName, setDisplayName] = useState("there");
-  const [promptOptions, setPromptOptions] = useState<string[]>(GENERIC_PROMPTS);
   const [isLoadingPrompts, setIsLoadingPrompts] = useState(true);
   const [chatLimitReached, setChatLimitReached] = useState(false);
   const router = useRouter();
@@ -87,27 +84,24 @@ export default function AiCoachPage() {
     if (hasFetchedPrompts.current) return;
     hasFetchedPrompts.current = true;
 
-    async function loadPersonalizedPrompts() {
-      const { prompts, chatLimitReached: limitReached } = await fetchPersonalizedPrompts();
-      // null covers both "brand-new user" and "generation failed" — either
-      // way, keep the generic template already set as the default state.
-      if (prompts) setPromptOptions(prompts);
+    async function loadChatLimit() {
+      const limitReached = await fetchChatLimitReached();
       setChatLimitReached(limitReached);
       setIsLoadingPrompts(false);
     }
 
-    void loadPersonalizedPrompts();
+    void loadChatLimit();
   }, []);
 
   const addMessage = (message: ChatMessage) => {
     setMessages((current) => [...current, message]);
   };
 
-  const handlePromptClick = (prompt: string) => {
+  const handlePromptClick = (topic: PromptTopic) => {
     if(ONLY_PREDEFINED){
-    router.push(`/aicoach/chat/${encodeURIComponent(prompt)}`);
+    router.push(`/aicoach/chat/${topic.id}/${encodeURIComponent(topic.label)}`);
     }else{
-       addMessage({ role: "user", text: prompt });
+       addMessage({ role: "user", text: topic.label });
       setTimeout(() => {
         addMessage({
           role: "assistant",
@@ -246,20 +240,20 @@ export default function AiCoachPage() {
                       <span className="h-3 flex-1 rounded-full bg-[var(--color-magenta)]/10" />
                     </div>
                   ))
-                : promptOptions.map((prompt, index) => {
-                    const TileIcon = TILE_ICONS[index % TILE_ICONS.length];
+                : PROMPT_TOPICS.map((topic) => {
+                    const TileIcon = topic.icon;
 
                     return (
                       <button
-                        key={prompt}
+                        key={topic.id}
                         type="button"
-                        onClick={() => handlePromptClick(prompt)}
+                        onClick={() => handlePromptClick(topic)}
                         className="flex w-full items-center gap-3 rounded-3xl border border-[var(--color-magenta)]/15 bg-[linear-gradient(135deg,rgba(74,15,126,0.06)_0%,rgba(188,3,185,0.06)_45%,rgba(242,115,33,0.06)_100%)] px-4 py-4 text-left text-sm text-[var(--color-charcoal)] transition hover:scale-[1.01]"
                       >
                         <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-brand-gradient">
                           <TileIcon className="h-4 w-4 text-white" />
                         </span>
-                        <span>{prompt}</span>
+                        <span>{topic.label}</span>
                       </button>
                     );
                   })}
