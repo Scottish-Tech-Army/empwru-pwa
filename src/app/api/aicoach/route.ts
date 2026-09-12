@@ -20,6 +20,16 @@ next to keep the conversation going, written in the user's own voice (first pers
 under 12 words each, no exclamation marks. Base them on what you just said and on the
 user's actual goals/context, never generic filler.`;
 
+const TOPIC_FOCUS: Record<string, string> = {
+  discovery:
+    "Focus this conversation on helping the user build self-awareness — their skills, qualities, values and interests.",
+  goals:
+    "Focus this conversation on helping the user get clarity on their goals — setting them, staying motivated, and making progress.",
+  stuck:
+    "Focus this conversation on problem-solving — help the user work through what's blocking them from taking action.",
+  idea: "Focus this conversation on sound-boarding the user's idea — help them think it through out loud.",
+};
+
 const CHAT_RESPONSE_GEMINI_SCHEMA = {
   type: "object",
   properties: {
@@ -43,9 +53,10 @@ const CHAT_RESPONSE_CLAUDE_SCHEMA = {
 };
 
 export async function POST(req: Request) {
-  const { message, history } = (await req.json()) as {
+  const { message, history, topic } = (await req.json()) as {
     message?: string;
     history?: ChatTurn[];
+    topic?: string;
   };
 
   if (!message?.trim()) {
@@ -68,19 +79,21 @@ export async function POST(req: Request) {
   // model quota — only the actual model call below is skipped for mock.
   const usage = await checkAndIncrementChatUsage(supabase, user.id);
   console.log("[aicoach] chat usage for", user.id, "=", usage);
+  const { remaining, limitReached } = usage;
   if (!usage.allowed) {
-    console.log("[aicoach] chat limit reached — returning canned reply, skipping model call");
+    console.log("[aicoach] daily limit reached — returning canned reply, skipping model call");
     return NextResponse.json({
       reply: "That's a good place to pause for today.",
       options: [],
-      chatLimitReached: true,
+      remaining,
+      limitReached,
     });
   }
-  const chatLimitReached = usage.chatCount >= usage.limit;
-  console.log("[aicoach] chatLimitReached after this message =", chatLimitReached);
+  console.log("[aicoach] remaining after this message =", remaining);
 
   const { goals, discovery } = await fetchAiCoachContext(supabase, user.id);
   const contextBlock = buildContextBlock(goals, discovery);
+  const topicFocus = topic ? TOPIC_FOCUS[topic] : undefined;
 
   if (AI_COACH_MOCK) {
     return NextResponse.json({
@@ -90,13 +103,14 @@ export async function POST(req: Request) {
         "What should I focus on this week",
         "I want to talk about something else",
       ],
-      chatLimitReached,
+      remaining,
+      limitReached,
     });
   }
 
   try {
     const responseText = await generateAiCoachJson({
-      systemInstruction: `${EM_PERSONA}\n\n${contextBlock}`,
+      systemInstruction: `${EM_PERSONA}\n\n${contextBlock}${topicFocus ? `\n\n${topicFocus}` : ""}`,
       contents: [...(history ?? []), { role: "user", text: message }],
       geminiSchema: CHAT_RESPONSE_GEMINI_SCHEMA,
       claudeSchema: CHAT_RESPONSE_CLAUDE_SCHEMA,
@@ -109,7 +123,7 @@ export async function POST(req: Request) {
         ? (parsed.options as string[]).slice(0, 4)
         : [];
 
-    return NextResponse.json({ reply, options, chatLimitReached });
+    return NextResponse.json({ reply, options, remaining, limitReached });
   } catch (error) {
     console.error("AI Coach request failed", error);
     return NextResponse.json({ error: "Failed to get a response" }, { status: 500 });

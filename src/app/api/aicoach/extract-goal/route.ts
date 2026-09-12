@@ -68,9 +68,15 @@ export async function POST(req: Request) {
   // the daily-limit behaviour itself can be tested locally without burning
   // model quota — only the actual model call below is skipped for mock.
   const usage = await checkAndIncrementGoalExtractUsage(supabase, user.id);
+  const { remaining, limitReached } = usage;
   if (!usage.allowed) {
     return NextResponse.json(
-      { error: "You've already turned a conversation into a goal today — come back tomorrow for another." },
+      {
+        error:
+          "You've used up today's AI Coach requests — come back tomorrow to turn another conversation into a goal.",
+        remaining,
+        limitReached,
+      },
       { status: 429 }
     );
   }
@@ -81,6 +87,8 @@ export async function POST(req: Request) {
       category: "Wellbeing",
       whyMatters: "I want more energy and to feel proud of my progress.",
       steps: ["Walk 20 minutes 3x this week", "Try one short jog", "Sign up for a local 5k"],
+      remaining,
+      limitReached,
     });
   }
 
@@ -117,14 +125,18 @@ export async function POST(req: Request) {
 
     if (!title || steps.length === 0) {
       return NextResponse.json(
-        { error: "Couldn't pin down a clear goal from this yet — chat a bit more first." },
+        {
+          error: "Couldn't pin down a clear goal from this yet — chat a bit more first.",
+          remaining,
+          limitReached,
+        },
         { status: 422 }
       );
     }
 
-    return NextResponse.json({ title, category, whyMatters, steps });
+    return NextResponse.json({ title, category, whyMatters, steps, remaining, limitReached });
   } catch (error) {
     console.error("AI Coach goal extraction failed", error);
-    return NextResponse.json({ error: "Failed to extract a goal" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to extract a goal", remaining, limitReached }, { status: 500 });
   }
 }

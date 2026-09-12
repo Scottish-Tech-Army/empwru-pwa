@@ -179,10 +179,27 @@ create policy "Users can manage their own baseline" on public.baseline_responses
 
 ## `ai_coach_daily_usage`
 
-Backs the AI Coach daily request cap: 4 regular chat turns + 1 reserved
-"turn this into a goal" extraction per user per day
-(`src/lib/aicoach-context.ts` — `checkAndIncrementChatUsage`,
-`checkAndIncrementGoalExtractUsage`). One row per user per calendar day.
+Backs the AI Coach daily request cap: one combined pool of `AICOACH_DAILY_LIMIT`
+(250) requests per user per day, shared across regular chat turns, goal
+extraction, and discovery extraction (`src/lib/aicoach-context.ts` —
+`checkAndIncrementChatUsage`, `checkAndIncrementGoalExtractUsage`,
+`checkAndIncrementDiscoveryExtractUsage`). All three are checked identically
+here — allowed as long as the combined total is under the limit — and each
+increment call returns how many requests are left (`remaining`).
+
+The "always leave one request free so a conversation can save itself"
+reservation is **not** enforced here — it's a client-side decision in the
+chat page (`src/app/aicoach/chat/[topic]/[prompt]/page.tsx`), which disables
+its own chat-send once `remaining <= 1` unless *that* conversation has
+already used "turn this into a goal / discovery notes". This table has no
+notion of separate conversations (just aggregate counts), so it genuinely
+can't make that call — an earlier, unrelated conversation extracting earlier
+today must not silently strip a later conversation's own chance to save
+itself, which ruled out enforcing the reservation here. `goal_extract_count`
+and `discovery_extract_count` are tracked in separate columns purely so
+usage can be told apart by type later — the limit check itself sums all
+three against the one shared `AICOACH_DAILY_LIMIT`. One row per user per
+calendar day.
 
 ```sql
 create table if not exists public.ai_coach_daily_usage (
@@ -190,6 +207,7 @@ create table if not exists public.ai_coach_daily_usage (
   usage_date date not null,
   chat_count integer not null default 0,
   goal_extract_count integer not null default 0,
+  discovery_extract_count integer not null default 0,
   updated_at timestamptz not null default now(),
   primary key (user_id, usage_date)
 );
@@ -213,6 +231,15 @@ create policy "Users can update their own AI Coach usage"
 `usage_date` — there's no cron/cleanup job, old rows are simply never read
 again. Consider a periodic delete of rows older than N days if table size
 ever becomes a concern.
+
+`discovery_extract_count` was added after the table's initial creation, via:
+```sql
+alter table public.ai_coach_daily_usage
+  add column if not exists discovery_extract_count integer not null default 0;
+```
+Run directly in the Supabase SQL editor (no migrations folder/CLI in this
+repo) — the `create table` above already reflects the column so a fresh
+environment gets it from the start.
 
 ---
 
