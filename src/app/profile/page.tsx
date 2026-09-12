@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { resetAllData } from "@/lib/storage";
 import {
   ArrowLeft,
   Compass,
@@ -10,6 +11,7 @@ import {
   LogOut,
   MapPin,
   Settings,
+  Trash2,
   TrendingUp,
 } from "lucide-react";
 
@@ -21,12 +23,29 @@ function getInitialsFromEmail(email: string | null | undefined) {
   return derived.toUpperCase();
 }
 
+function getInitials(
+  firstName: string | null | undefined,
+  lastName: string | null | undefined,
+  fallbackName: string,
+) {
+  const firstInitial = firstName?.trim().charAt(0) ?? "";
+  const lastInitial = lastName?.trim().charAt(0) ?? "";
+  const combined = `${firstInitial}${lastInitial}`;
+
+  if (combined) return combined.toUpperCase();
+
+  return (fallbackName.slice(0, 2) || "U").toUpperCase();
+}
+
 export default function ProfilePage() {
   const router = useRouter();
   const [displayName, setDisplayName] = useState("User");
   const [initials, setInitials] = useState("U");
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -44,7 +63,11 @@ export default function ProfilePage() {
 
       const metadataName = session.user.user_metadata?.display_name;
       const name = metadataName || getInitialsFromEmail(session.user.email);
-      const nextInitials = (name.slice(0, 2) || "U").toUpperCase();
+      const nextInitials = getInitials(
+        session.user.user_metadata?.first_name,
+        session.user.user_metadata?.last_name,
+        name,
+      );
 
       setDisplayName(name);
       setInitials(nextInitials);
@@ -71,6 +94,34 @@ export default function ProfilePage() {
     }
 
     router.replace("/signIn");
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleting) return;
+
+    setDeleting(true);
+    setDeleteError("");
+
+    try {
+      const response = await fetch("/api/account", { method: "DELETE" });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error ?? "Failed to delete account.");
+      }
+
+      resetAllData();
+      await supabase.auth.signOut();
+      router.replace("/signUp");
+    } catch (error) {
+      console.error("Account deletion failed", error);
+      setDeleteError(
+        error instanceof Error
+          ? error.message
+          : "Failed to delete account. Please try again.",
+      );
+      setDeleting(false);
+    }
   };
 
   return (
@@ -156,9 +207,60 @@ export default function ProfilePage() {
               <LogOut className="w-5 h-5" />
               {loggingOut ? "Logging out..." : "Logout"}
             </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteError("");
+                setShowDeleteConfirm(true);
+              }}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-3xl border border-red-200 px-4 py-4 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+            >
+              <Trash2 className="w-5 h-5" />
+              Delete my account
+            </button>
           </div>
         </div>
       </div>
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4">
+          <div className="w-full max-w-sm rounded-[32px] bg-white p-6 text-center shadow-[0_25px_60px_rgba(0,0,0,0.12)] ring-1 ring-black/10">
+            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-red-600">
+              This can&apos;t be undone
+            </p>
+            <h2 className="mt-4 text-2xl font-bold text-[var(--color-charcoal)]">
+              Delete your account?
+            </h2>
+            <p className="mt-3 text-sm leading-7 text-[rgba(3,3,3,0.75)]">
+              This will permanently delete your account and all your data —
+              goals, discovery, check-ins and progress — from our servers and
+              this device. This cannot be reversed.
+            </p>
+
+            {deleteError && (
+              <p className="mt-3 text-sm text-red-600">{deleteError}</p>
+            )}
+
+            <button
+              type="button"
+              onClick={handleDeleteAccount}
+              disabled={deleting}
+              className="mt-6 w-full rounded-2xl bg-red-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {deleting ? "Deleting..." : "Yes, delete my account"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(false)}
+              disabled={deleting}
+              className="mt-3 w-full rounded-2xl border border-gray-200 px-6 py-3 text-sm font-semibold text-[var(--color-charcoal)] transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

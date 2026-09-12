@@ -7,16 +7,25 @@ import {
   Goal,
   hasCheckedInThisWeek,
   getMomentumDays,
+  getDaysSinceLastCheckIn,
+  shouldShowCheckInReminder,
+  dismissCheckInReminder,
+  getDaysSinceBaselineCompleted,
+  shouldShowBaselineReminder,
+  dismissBaselineReminder,
   isDiscoveryPopulated,
   loadGoalsFromSupabase,
+  loadCheckInsFromSupabase,
 } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
 
 import BottomNav from "@/components/ui/BottomNav";
+import BottomSheet from "@/components/ui/BottomSheet";
 import UserInitialsBadge from "@/components/ui/UserInitialsBadge";
 import {
   Flame,
   Bell,
+  ClipboardList,
   Plus,
   Sun,
   Sunset,
@@ -49,6 +58,8 @@ export default function DashboardPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [showCheckInPrompt, setShowCheckInPrompt] = useState(false);
+  const [showCheckInReminder, setShowCheckInReminder] = useState(false);
+  const [showBaselineReminder, setShowBaselineReminder] = useState(false);
   const [momentum, setMomentum] = useState(0);
   const [isDiscoveryEmpty, setIsDiscoveryEmpty] = useState(false);
   const [displayName, setDisplayName] = useState("User");
@@ -62,7 +73,20 @@ export default function DashboardPage() {
       setGoals([]);
     }
 
+    try {
+      await loadCheckInsFromSupabase();
+    } catch (error) {
+      console.error("Failed to refresh dashboard check-ins", error);
+    }
+
     setShowCheckInPrompt(!hasCheckedInThisWeek());
+
+    const checkInReminderDue = shouldShowCheckInReminder();
+    setShowCheckInReminder(checkInReminderDue);
+    // Only ever show one reminder popup at a time — the weekly check-in
+    // takes priority since it's the more central habit loop.
+    setShowBaselineReminder(!checkInReminderDue && shouldShowBaselineReminder());
+
     setMomentum(getMomentumDays());
     setIsDiscoveryEmpty(!isDiscoveryPopulated());
   };
@@ -92,7 +116,7 @@ export default function DashboardPage() {
 
       setDisplayName(nextDisplayName);
 
-      if (!metadataName || metadataName !== derivedName) {
+      if (!metadataName) {
         await supabase.auth.updateUser({ data: { display_name: derivedName } });
       }
 
@@ -153,7 +177,30 @@ export default function DashboardPage() {
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const GreetingIcon = hour < 12 ? Sun : hour < 18 ? Sunset : Moon;
 
+  const daysSinceLastCheckIn = getDaysSinceLastCheckIn();
+  const daysSinceBaselineCompleted = getDaysSinceBaselineCompleted();
 
+  const handleDismissCheckInReminder = () => {
+    dismissCheckInReminder();
+    setShowCheckInReminder(false);
+  };
+
+  const handleStartCheckInFromReminder = () => {
+    dismissCheckInReminder();
+    setShowCheckInReminder(false);
+    router.push("/checkin");
+  };
+
+  const handleDismissBaselineReminder = () => {
+    dismissBaselineReminder();
+    setShowBaselineReminder(false);
+  };
+
+  const handleStartBaselineFromReminder = () => {
+    dismissBaselineReminder();
+    setShowBaselineReminder(false);
+    router.push("/onboarding/baseline");
+  };
 
   return (
     <div className="min-h-dvh bg-bg-card flex flex-col">
@@ -329,6 +376,70 @@ export default function DashboardPage() {
       <div className="h-20" />
 
       <BottomNav />
+
+      {/* Weekly Check-in Reminder */}
+      <BottomSheet
+        isOpen={showCheckInReminder}
+        onClose={handleDismissCheckInReminder}
+        title="Time for your weekly check-in"
+      >
+        <div className="flex flex-col items-center text-center gap-4 pt-2 pb-2">
+          <div className="w-14 h-14 rounded-2xl bg-brand-primary/10 flex items-center justify-center">
+            <Bell className="w-7 h-7 text-brand-primary" strokeWidth={1.5} />
+          </div>
+          <p className="text-text-muted">
+            {daysSinceLastCheckIn === null
+              ? "U haven't done a check-in yet — even five minutes counts."
+              : `It's been ${daysSinceLastCheckIn} day${daysSinceLastCheckIn !== 1 ? "s" : ""} since your last check-in. Take a moment for U.`}
+          </p>
+          <div className="w-full flex flex-col gap-3 mt-2">
+            <button
+              onClick={handleStartCheckInFromReminder}
+              className="w-full py-3 bg-brand-primary text-white rounded-2xl font-semibold hover:bg-brand-primary/90 transition"
+            >
+              Start check-in
+            </button>
+            <button
+              onClick={handleDismissCheckInReminder}
+              className="w-full py-3 bg-white border border-gray-200 rounded-2xl font-semibold text-[var(--color-charcoal)] hover:bg-gray-50 transition"
+            >
+              Remind me later
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Baseline Quiz Reminder (every 6 weeks) */}
+      <BottomSheet
+        isOpen={showBaselineReminder}
+        onClose={handleDismissBaselineReminder}
+        title="Time to revisit your baseline"
+      >
+        <div className="flex flex-col items-center text-center gap-4 pt-2 pb-2">
+          <div className="w-14 h-14 rounded-2xl bg-brand-primary/10 flex items-center justify-center">
+            <ClipboardList className="w-7 h-7 text-brand-primary" strokeWidth={1.5} />
+          </div>
+          <p className="text-text-muted">
+            {daysSinceBaselineCompleted === null
+              ? "See how U've grown by retaking your baseline questions."
+              : `It's been ${daysSinceBaselineCompleted} days since your last baseline check. See how far U've come.`}
+          </p>
+          <div className="w-full flex flex-col gap-3 mt-2">
+            <button
+              onClick={handleStartBaselineFromReminder}
+              className="w-full py-3 bg-brand-primary text-white rounded-2xl font-semibold hover:bg-brand-primary/90 transition"
+            >
+              Retake baseline questions
+            </button>
+            <button
+              onClick={handleDismissBaselineReminder}
+              className="w-full py-3 bg-white border border-gray-200 rounded-2xl font-semibold text-[var(--color-charcoal)] hover:bg-gray-50 transition"
+            >
+              Remind me later
+            </button>
+          </div>
+        </div>
+      </BottomSheet>
     </div>
   );
 }

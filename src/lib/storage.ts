@@ -16,7 +16,10 @@ export const STORAGE_KEYS = {
   CATEGORY: `${STORAGE_PREFIX}category`,
   GOALS: `${STORAGE_PREFIX}goals`,
   CHECKINS: `${STORAGE_PREFIX}checkins`,
-  PROGRESS_LIKES: `${STORAGE_PREFIX}progress_likes`,
+  CHECKIN_REMINDER_DISMISSED: `${STORAGE_PREFIX}checkin_reminder_dismissed`,
+  CHECKIN_REMINDER_INTRO_SEEN: `${STORAGE_PREFIX}checkin_reminder_intro_seen`,
+  BASELINE_REMINDER_DISMISSED: `${STORAGE_PREFIX}baseline_reminder_dismissed`,
+  BASELINE_REMINDER_INTRO_SEEN: `${STORAGE_PREFIX}baseline_reminder_intro_seen`,
   PREFERENCES: `${STORAGE_PREFIX}preferences`,
   DAILY_QUOTE: "empwru_daily_quote", // Standardized name
   DISCOVERY: `${STORAGE_PREFIX}discovery`,
@@ -48,6 +51,122 @@ function notifyGoalDataChanged(): void {
   window.dispatchEvent(new Event("empwru-goals-updated"));
 }
 
+// =============================================================================
+// Per-user storage scoping
+//
+// Every key above used to be a single browser-wide key, so switching
+// accounts in the same browser (or testing multiple signups) leaked one
+// user's local data — onboarding state, dismissed reminders, etc. — into
+// the next. Reads/writes are now scoped to whichever user is currently
+// signed in (`<key>::<userId>`), tracked here via a small in-memory cache
+// kept in sync by Supabase's auth listener (reads stay synchronous
+// everywhere else in this file, per the module's existing contract).
+//
+// Data written before an account exists (pre-signup onboarding) still goes
+// to the bare, unscoped key as a "guest bucket". The first time a *new*
+// user id signs in in this browser, that guest bucket is claimed into
+// their scoped keys and cleared — one-time, and only for keys that could
+// legitimately hold pre-signup data. Keys that only ever get written after
+// auth (e.g. the check-in reminder dismissal) are deliberately excluded so
+// they can never leak from one account into the next.
+// =============================================================================
+
+const SCOPE_SEPARATOR = "::";
+const CURRENT_USER_ID_KEY = `${STORAGE_PREFIX}__current_user_id`;
+
+const NON_CLAIMABLE_KEYS: string[] = [
+  STORAGE_KEYS.CHECKIN_REMINDER_DISMISSED,
+  STORAGE_KEYS.CHECKIN_REMINDER_INTRO_SEEN,
+  STORAGE_KEYS.BASELINE_REMINDER_DISMISSED,
+  STORAGE_KEYS.BASELINE_REMINDER_INTRO_SEEN,
+  STORAGE_KEYS.DAILY_QUOTE,
+];
+
+let currentUserId: string | null = isBrowser()
+  ? localStorage.getItem(CURRENT_USER_ID_KEY)
+  : null;
+
+function scopedKey(key: string): string {
+  return currentUserId ? `${key}${SCOPE_SEPARATOR}${currentUserId}` : key;
+}
+
+function claimGuestDataForUser(userId: string): void {
+  Object.values(STORAGE_KEYS).forEach((key) => {
+    if (NON_CLAIMABLE_KEYS.includes(key)) return;
+
+    const scoped = `${key}${SCOPE_SEPARATOR}${userId}`;
+    if (localStorage.getItem(scoped) !== null) return; // this account already has its own data
+
+    const guestValue = localStorage.getItem(key);
+    if (guestValue === null) return;
+
+    localStorage.setItem(scoped, guestValue);
+    localStorage.removeItem(key);
+  });
+}
+
+/**
+ * Refresh the cached current-user id and react to it changing. Called both
+ * reactively (Supabase's auth listener, below) and directly by
+ * `getCurrentUserId()` — the listener alone isn't guaranteed to have fired
+ * yet the first time a page reads/writes scoped data right after sign-in
+ * (e.g. the dashboard's very first load, whose data calls already resolve
+ * the real session before anything scoped is read), so callers that already
+ * know the authoritative session id feed it back in here directly instead
+ * of waiting on the listener.
+ */
+function updateCurrentUserId(nextUserId: string | null): void {
+  if (nextUserId === currentUserId) return;
+
+  if (nextUserId) {
+    claimGuestDataForUser(nextUserId);
+  }
+
+  currentUserId = nextUserId;
+
+  if (nextUserId) {
+    localStorage.setItem(CURRENT_USER_ID_KEY, nextUserId);
+  } else {
+    localStorage.removeItem(CURRENT_USER_ID_KEY);
+  }
+}
+
+if (isBrowser()) {
+  supabase.auth.onAuthStateChange((_event, session) => {
+    updateCurrentUserId(session?.user?.id ?? null);
+  });
+}
+
+/**
+ * Whether `key` is still within its "first day seen" grace period for the
+ * current user — the calendar day it was first checked, recorded once and
+ * never overwritten again.
+ *
+ * Used to suppress a reminder popup the first time it would ever be shown,
+ * without a plain boolean "seen" flag: the dashboard evaluates these
+ * reminders more than once on a fresh load (mount + the `focus`/
+ * `visibilitychange` listeners re-running shortly after), and a flag that
+ * flips itself true on the very first check would suppress on that first
+ * call but then show the real popup on the second one moments later. A
+ * day-marker gives the same answer regardless of how many times it's
+ * checked that day, since only the write is one-time — the read is a pure
+ * comparison against a value that doesn't change out from under it.
+ */
+function isWithinFirstSeenDay(key: string): boolean {
+  if (!isBrowser()) return false;
+
+  const storageKey = scopedKey(key);
+  const today = new Date().toDateString();
+  const firstSeenDay = localStorage.getItem(storageKey);
+
+  if (!firstSeenDay) {
+    localStorage.setItem(storageKey, today);
+    return true;
+  }
+
+  return firstSeenDay === today;
+}
+
 /**
  * Get onboarding state from localStorage
  */
@@ -55,7 +174,7 @@ export function getOnboardingState(): OnboardingState {
   if (!isBrowser()) return DEFAULT_ONBOARDING;
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEYS.ONBOARDING);
+    const stored = localStorage.getItem(scopedKey(STORAGE_KEYS.ONBOARDING));
     if (!stored) return DEFAULT_ONBOARDING;
     return JSON.parse(stored) as OnboardingState;
   } catch {
@@ -71,7 +190,7 @@ export function saveOnboardingState(state: Partial<OnboardingState>): void {
 
   const current = getOnboardingState();
   const updated = { ...current, ...state };
-  localStorage.setItem(STORAGE_KEYS.ONBOARDING, JSON.stringify(updated));
+  localStorage.setItem(scopedKey(STORAGE_KEYS.ONBOARDING), JSON.stringify(updated));
 }
 
 /**
@@ -93,7 +212,7 @@ export function completeOnboarding(): void {
  */
 export function hasSeenAiCoachWelcome(): boolean {
   if (!isBrowser()) return false;
-  return localStorage.getItem(STORAGE_KEYS.AICOACH_WELCOME_SEEN) === "true";
+  return localStorage.getItem(scopedKey(STORAGE_KEYS.AICOACH_WELCOME_SEEN)) === "true";
 }
 
 /**
@@ -101,7 +220,7 @@ export function hasSeenAiCoachWelcome(): boolean {
  */
 export function markAiCoachWelcomeSeen(): void {
   if (!isBrowser()) return;
-  localStorage.setItem(STORAGE_KEYS.AICOACH_WELCOME_SEEN, "true");
+  localStorage.setItem(scopedKey(STORAGE_KEYS.AICOACH_WELCOME_SEEN), "true");
 }
 
 /**
@@ -112,6 +231,7 @@ export function resetAllData(): void {
 
   Object.values(STORAGE_KEYS).forEach((key) => {
     localStorage.removeItem(key);
+    localStorage.removeItem(scopedKey(key));
   });
 }
 
@@ -171,7 +291,7 @@ export function getBaselineResponse(): BaselineResponse {
   if (!isBrowser()) return DEFAULT_BASELINE;
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEYS.BASELINE);
+    const stored = localStorage.getItem(scopedKey(STORAGE_KEYS.BASELINE));
     if (!stored) return DEFAULT_BASELINE;
     return JSON.parse(stored) as BaselineResponse;
   } catch {
@@ -187,7 +307,7 @@ export function saveBaselineResponse(response: Partial<BaselineResponse>): void 
 
   const current = getBaselineResponse();
   const updated = { ...current, ...response };
-  localStorage.setItem(STORAGE_KEYS.BASELINE, JSON.stringify(updated));
+  localStorage.setItem(scopedKey(STORAGE_KEYS.BASELINE), JSON.stringify(updated));
 }
 
 /**
@@ -195,6 +315,66 @@ export function saveBaselineResponse(response: Partial<BaselineResponse>): void 
  */
 export function completeBaseline(): void {
   saveBaselineResponse({ completedAt: new Date().toISOString() });
+}
+
+const BASELINE_REMINDER_INTERVAL_DAYS = 42; // 6 weeks
+
+/**
+ * Days elapsed since the baseline quiz was last completed, or null if it's
+ * never been completed.
+ */
+export function getDaysSinceBaselineCompleted(): number | null {
+  const { completedAt } = getBaselineResponse();
+  if (!completedAt) return null;
+
+  const diffMs = Date.now() - new Date(completedAt).getTime();
+  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+}
+
+/**
+ * Which 6-week period we're currently in relative to the last baseline
+ * completion (0 = the 6 weeks right after completing it, not yet due).
+ */
+function getBaselineReminderPeriod(daysSinceCompleted: number): number {
+  return Math.floor(daysSinceCompleted / BASELINE_REMINDER_INTERVAL_DAYS);
+}
+
+/**
+ * Whether the "retake your baseline quiz" reminder popup should be shown:
+ * due every 6 weeks since it was last completed, and not already dismissed
+ * for this specific 6-week period (re-prompts once the next period starts).
+ *
+ * Like the weekly check-in reminder, the first calendar day this would ever
+ * become due for a given user is skipped entirely, so a brand-new account
+ * isn't hit with another popup on top of everything else from onboarding.
+ */
+export function shouldShowBaselineReminder(): boolean {
+  if (!isBrowser()) return false;
+
+  const daysSinceCompleted = getDaysSinceBaselineCompleted();
+  if (daysSinceCompleted === null) return false;
+
+  const currentPeriod = getBaselineReminderPeriod(daysSinceCompleted);
+  if (currentPeriod < 1) return false;
+
+  if (isWithinFirstSeenDay(STORAGE_KEYS.BASELINE_REMINDER_INTRO_SEEN)) return false;
+
+  const dismissedPeriod = localStorage.getItem(scopedKey(STORAGE_KEYS.BASELINE_REMINDER_DISMISSED));
+  return dismissedPeriod !== String(currentPeriod);
+}
+
+/**
+ * Dismiss the baseline reminder popup for the current 6-week period only —
+ * it reappears once the next period starts and a retake is still due.
+ */
+export function dismissBaselineReminder(): void {
+  if (!isBrowser()) return;
+
+  const daysSinceCompleted = getDaysSinceBaselineCompleted();
+  if (daysSinceCompleted === null) return;
+
+  const currentPeriod = getBaselineReminderPeriod(daysSinceCompleted);
+  localStorage.setItem(scopedKey(STORAGE_KEYS.BASELINE_REMINDER_DISMISSED), String(currentPeriod));
 }
 
 // =============================================================================
@@ -270,7 +450,9 @@ async function getCurrentUserId(): Promise<string | null> {
       return null;
     }
 
-    return session?.user?.id ?? null;
+    const userId = session?.user?.id ?? null;
+    updateCurrentUserId(userId);
+    return userId;
   } catch (error) {
     console.error("Unable to resolve Supabase user", error);
     return null;
@@ -394,7 +576,7 @@ export function getGoals(): Goal[] {
   if (!isBrowser()) return [];
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEYS.GOALS);
+    const stored = localStorage.getItem(scopedKey(STORAGE_KEYS.GOALS));
     if (!stored) return [];
     const rawGoals = JSON.parse(stored) as Goal[];
 
@@ -425,7 +607,7 @@ export function getGoalById(id: string): Goal | null {
  */
 function saveGoals(goals: Goal[]): void {
   if (!isBrowser()) return;
-  localStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(goals));
+  localStorage.setItem(scopedKey(STORAGE_KEYS.GOALS), JSON.stringify(goals));
   notifyGoalDataChanged();
 }
 
@@ -703,53 +885,78 @@ export interface CheckIn {
   reflection?: string; // Optional weekly reflection
   stepsCompleted: string[]; // IDs of steps marked complete this session (legacy)
   milestonesCompleted?: string[]; // Legacy
+  likedAchievement?: boolean; // Saved as a "proud of" memory on the progress page
+  likedReflection?: boolean; // Saved as a "learning" memory on the progress page
   createdAt: string; // ISO datetime
 }
 
-export interface ProgressLikes {
-  achievements: string[]; // CheckIn IDs liked as proud-of
-  reflection: string[]; // CheckIn IDs liked as learning
+function mapCheckInFromSupabase(row: Record<string, unknown>): CheckIn {
+  return {
+    id: String(row.id ?? ""),
+    date: String(row.date ?? ""),
+    energyLevel: Number(row.energy_level ?? 0),
+    achievements: row.achievements ? String(row.achievements) : undefined,
+    reflection: row.reflection ? String(row.reflection) : undefined,
+    stepsCompleted: Array.isArray(row.steps_completed) ? (row.steps_completed as string[]) : [],
+    likedAchievement: Boolean(row.liked_achievement),
+    likedReflection: Boolean(row.liked_reflection),
+    createdAt: String(row.created_at ?? new Date().toISOString()),
+  };
 }
 
-const DEFAULT_PROGRESS_LIKES: ProgressLikes = {
-  achievements: [],
-  reflection: [],
-};
+function mapCheckInForSupabase(checkIn: CheckIn, userId: string) {
+  return {
+    id: checkIn.id,
+    user_id: userId,
+    date: checkIn.date,
+    energy_level: checkIn.energyLevel,
+    achievements: checkIn.achievements ?? null,
+    reflection: checkIn.reflection ?? null,
+    steps_completed: checkIn.stepsCompleted ?? [],
+    liked_achievement: checkIn.likedAchievement ?? false,
+    liked_reflection: checkIn.likedReflection ?? false,
+    created_at: checkIn.createdAt,
+  };
+}
 
-/**
- * Get saved progress likes (proud-of / learning) from localStorage.
- */
-export function getProgressLikes(): ProgressLikes {
-  if (!isBrowser()) return DEFAULT_PROGRESS_LIKES;
+export async function syncCheckInToSupabase(checkIn: CheckIn): Promise<void> {
+  if (!isBrowser()) return;
 
-  try {
-    const stored = localStorage.getItem(STORAGE_KEYS.PROGRESS_LIKES);
-    if (!stored) return DEFAULT_PROGRESS_LIKES;
-    return JSON.parse(stored) as ProgressLikes;
-  } catch {
-    return DEFAULT_PROGRESS_LIKES;
+  const userId = await getCurrentUserId();
+  if (!userId) return;
+
+  const { error } = await supabase
+    .from("checkins")
+    .upsert(mapCheckInForSupabase(checkIn, userId), { onConflict: "id" });
+
+  if (error) {
+    console.error("Failed to sync check-in to Supabase", error);
   }
 }
 
-/**
- * Toggle a liked progress card (proud-of or learning) for a specific check-in.
- */
-export function toggleProgressLike(type: keyof ProgressLikes, checkInId: string): ProgressLikes {
-  const current = getProgressLikes();
-  const list = new Set(current[type]);
+export async function loadCheckInsFromSupabase(): Promise<CheckIn[]> {
+  if (!isBrowser()) return [];
 
-  if (list.has(checkInId)) {
-    list.delete(checkInId);
-  } else {
-    list.add(checkInId);
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from("checkins")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("Failed to load check-ins from Supabase", error);
+    return [];
   }
 
-  const updated = { ...current, [type]: Array.from(list) };
-  if (isBrowser()) {
-    localStorage.setItem(STORAGE_KEYS.PROGRESS_LIKES, JSON.stringify(updated));
-  }
+  const remoteCheckIns = (data ?? []).map((row) => mapCheckInFromSupabase(row as Record<string, unknown>));
 
-  return updated;
+  // Always mirror the remote result locally, including empty results —
+  // otherwise a deleted-down-to-zero checkin list leaves a stale cached entry behind.
+  saveCheckIns(remoteCheckIns);
+  return remoteCheckIns;
 }
 
 /**
@@ -759,7 +966,7 @@ export function getCheckIns(): CheckIn[] {
   if (!isBrowser()) return [];
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEYS.CHECKINS);
+    const stored = localStorage.getItem(scopedKey(STORAGE_KEYS.CHECKINS));
     if (!stored) return [];
     const rawCheckIns = JSON.parse(stored) as CheckIn[];
 
@@ -770,11 +977,21 @@ export function getCheckIns(): CheckIn[] {
       } else if (!c.stepsCompleted) {
         c.stepsCompleted = [];
       }
+      if (c.likedAchievement === undefined) c.likedAchievement = false;
+      if (c.likedReflection === undefined) c.likedReflection = false;
       return c as CheckIn;
     });
   } catch {
     return [];
   }
+}
+
+/**
+ * Save all check-ins to localStorage
+ */
+function saveCheckIns(checkIns: CheckIn[]): void {
+  if (!isBrowser()) return;
+  localStorage.setItem(scopedKey(STORAGE_KEYS.CHECKINS), JSON.stringify(checkIns));
 }
 
 /**
@@ -793,22 +1010,46 @@ export function getLastCheckIn(): CheckIn | null {
  * Save a new check-in to localStorage
  */
 export function saveCheckIn(
-  checkIn: Omit<CheckIn, "id" | "createdAt" | "stepsCompleted"> & { stepsCompleted?: string[], milestonesCompleted?: string[] }
+  checkIn: Omit<CheckIn, "id" | "createdAt" | "stepsCompleted" | "likedAchievement" | "likedReflection"> & { stepsCompleted?: string[], milestonesCompleted?: string[] }
 ): CheckIn {
   const newCheckIn: CheckIn = {
     ...checkIn,
     stepsCompleted: checkIn.stepsCompleted || checkIn.milestonesCompleted || [],
+    likedAchievement: false,
+    likedReflection: false,
     id: generateId(),
     createdAt: new Date().toISOString(),
   };
 
   const checkIns = getCheckIns();
   checkIns.push(newCheckIn);
-
-  if (!isBrowser()) return newCheckIn;
-  localStorage.setItem(STORAGE_KEYS.CHECKINS, JSON.stringify(checkIns));
+  saveCheckIns(checkIns);
+  void syncCheckInToSupabase(newCheckIn);
 
   return newCheckIn;
+}
+
+/**
+ * Toggle a liked memory (proud-of or learning) on a specific check-in.
+ */
+export function toggleCheckInLike(
+  type: "achievements" | "reflection",
+  checkInId: string
+): CheckIn[] {
+  const checkIns = getCheckIns();
+  const checkIn = checkIns.find((c) => c.id === checkInId);
+  if (!checkIn) return checkIns;
+
+  if (type === "achievements") {
+    checkIn.likedAchievement = !checkIn.likedAchievement;
+  } else {
+    checkIn.likedReflection = !checkIn.likedReflection;
+  }
+
+  saveCheckIns(checkIns);
+  void syncCheckInToSupabase(checkIn);
+
+  return checkIns;
 }
 
 /**
@@ -835,6 +1076,47 @@ export function hasCheckedInThisWeek(): boolean {
   const checkInDate = new Date(lastCheckIn.createdAt);
 
   return checkInDate >= weekStart;
+}
+
+/**
+ * Days elapsed since the user's last check-in, or null if they've never
+ * checked in.
+ */
+export function getDaysSinceLastCheckIn(): number | null {
+  const lastCheckIn = getLastCheckIn();
+  if (!lastCheckIn) return null;
+
+  const diffMs = Date.now() - new Date(lastCheckIn.createdAt).getTime();
+  return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+}
+
+/**
+ * Whether the weekly check-in reminder popup should be shown: due this week
+ * and not already dismissed for this specific week (re-prompts next week).
+ *
+ * The first calendar day this would ever show for a given user is skipped
+ * entirely — they've just been through onboarding, so one more popup right
+ * away would be overwhelming. It behaves normally (reappearing every week
+ * it's due) from the next day on.
+ */
+export function shouldShowCheckInReminder(): boolean {
+  if (!isBrowser()) return false;
+  if (hasCheckedInThisWeek()) return false;
+  if (isWithinFirstSeenDay(STORAGE_KEYS.CHECKIN_REMINDER_INTRO_SEEN)) return false;
+
+  const dismissedWeek = localStorage.getItem(scopedKey(STORAGE_KEYS.CHECKIN_REMINDER_DISMISSED));
+  const currentWeekKey = getWeekStart(new Date()).toISOString();
+  return dismissedWeek !== currentWeekKey;
+}
+
+/**
+ * Dismiss the check-in reminder popup for the current week only — it
+ * reappears once a new week starts and a check-in is still due.
+ */
+export function dismissCheckInReminder(): void {
+  if (!isBrowser()) return;
+  const currentWeekKey = getWeekStart(new Date()).toISOString();
+  localStorage.setItem(scopedKey(STORAGE_KEYS.CHECKIN_REMINDER_DISMISSED), currentWeekKey);
 }
 
 /**
@@ -968,7 +1250,7 @@ export function getDiscoveryData(): DiscoveryData {
   if (!isBrowser()) return DEFAULT_DISCOVERY;
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEYS.DISCOVERY);
+    const stored = localStorage.getItem(scopedKey(STORAGE_KEYS.DISCOVERY));
     if (!stored) return DEFAULT_DISCOVERY;
     return JSON.parse(stored) as DiscoveryData;
   } catch {
@@ -1025,7 +1307,7 @@ export async function syncDiscoveryDataToSupabase(data: DiscoveryData): Promise<
 export async function loadDiscoveryDataFromSupabase(): Promise<DiscoveryData> {
   const remoteData = await getDiscoveryDataFromSupabase();
   if (remoteData) {
-    localStorage.setItem(STORAGE_KEYS.DISCOVERY, JSON.stringify(remoteData));
+    localStorage.setItem(scopedKey(STORAGE_KEYS.DISCOVERY), JSON.stringify(remoteData));
     return remoteData;
   }
 
@@ -1044,7 +1326,7 @@ export function saveDiscoveryData(data: Partial<DiscoveryData>): void {
     ...data,
     updatedAt: new Date().toISOString()
   };
-  localStorage.setItem(STORAGE_KEYS.DISCOVERY, JSON.stringify(updated));
+  localStorage.setItem(scopedKey(STORAGE_KEYS.DISCOVERY), JSON.stringify(updated));
   void syncDiscoveryDataToSupabase(updated);
 }
 
