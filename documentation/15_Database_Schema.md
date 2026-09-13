@@ -139,9 +139,13 @@ create policy "Users can delete their own discovery data"
 
 ## `baseline_responses`
 
-One row per user holding their onboarding baseline-quiz answers and
+An append-only history of the baseline-quiz/"About U checkin" answers and
 weekly-reminder preference (`src/lib/baseline.ts` —
-`saveBaselineToSupabase`, `loadBaselineForCurrentUser`).
+`saveBaselineToSupabase`, `loadBaselineForCurrentUser`,
+`loadBaselineHistoryForCurrentUser`): one row per *completion*, not one row
+per user — retaking the quiz inserts a new row rather than overwriting the
+previous one, so the first-ever row is "where you started" and the review
+UI can compare it against the latest.
 
 > **Discrepancy worth flagging**: `CLAUDE.md` currently states that baseline
 > quiz data "never syncs to Supabase" and stays in localStorage only. The
@@ -149,16 +153,25 @@ weekly-reminder preference (`src/lib/baseline.ts` —
 > table. Worth confirming with the team which is actually true in production
 > and correcting whichever side is stale.
 
-Confirmed against the live schema — this section is exact, not code-inferred.
-It has a `created_at` column the app never touches, and instead of one
-policy per operation it uses a single `for all` policy (select/insert/
-update/delete all in one, with both `using` and `with check`) — simpler than
-the split-policy style used on the other tables here, and note it technically
-permits deleting a baseline row even though no app code path does that today.
+Confirmed against the live schema (post-migration target — see
+`baseline_responses_history_migration.sql`) — this section is exact, not
+code-inferred, other than that migration itself. It has a `created_at`
+column the app never touches, and instead of one policy per operation it
+uses a single `for all` policy (select/insert/update/delete all in one, with
+both `using` and `with check`) — simpler than the split-policy style used on
+the other tables here, and note it technically permits deleting a baseline
+row even though no app code path does that today.
+
+`user_id` used to be the primary key (strictly one row per user); it's now
+a plain indexed column since a user can have many completions. Ordering by
+`(user_id, completed_at)` is how "latest" (`loadBaselineForCurrentUser`) and
+"full history, oldest first" (`loadBaselineHistoryForCurrentUser`) are
+told apart — both are the same table, just different `order`/`limit`.
 
 ```sql
 create table if not exists public.baseline_responses (
-  user_id uuid primary key references auth.users(id) on delete cascade,
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
   responses jsonb not null default '{}'::jsonb,
   completed_at timestamptz,
   reminder_day text,
@@ -166,6 +179,9 @@ create table if not exists public.baseline_responses (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+create index if not exists baseline_responses_user_id_completed_at_idx
+  on public.baseline_responses (user_id, completed_at);
 
 alter table public.baseline_responses enable row level security;
 

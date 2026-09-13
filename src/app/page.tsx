@@ -18,6 +18,7 @@ import {
   loadCheckInsFromSupabase,
 } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
+import { capitalizeWords, getDisplayNameFromEmail } from "@/lib/user-display";
 
 import BottomNav from "@/components/ui/BottomNav";
 import BottomSheet from "@/components/ui/BottomSheet";
@@ -35,14 +36,6 @@ import GoalCard from "@/components/ui/GoalCard";
 import DailyQuote from "@/components/ui/DailyQuote";
 import { DottedEmptyState } from "@/components";
 import { Lightbulb } from "lucide-react";
-
-function getDisplayNameFromEmail(email: string | null | undefined) {
-  const localPart = email?.split("@")[0] ?? "user";
-  const cleaned = localPart.replace(/[^a-zA-Z0-9]/g, "");
-  const derived = cleaned.slice(0, 6) || "user";
-
-  return derived.charAt(0).toUpperCase() + derived.slice(1);
-}
 
 /**
  * Dashboard - Main home page after onboarding
@@ -99,20 +92,13 @@ export default function DashboardPage() {
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (!isActive) return;
-
-      if (!session) {
-        setIsAuthenticated(false);
-        setAuthChecked(true);
-        router.replace("/signIn");
-        return;
-      }
+      if (!isActive || !session) return;
 
       setIsAuthenticated(true);
 
       const derivedName = getDisplayNameFromEmail(session.user.email);
       const metadataName = session.user.user_metadata?.display_name;
-      const nextDisplayName = metadataName || derivedName;
+      const nextDisplayName = metadataName ? capitalizeWords(metadataName) : derivedName;
 
       setDisplayName(nextDisplayName);
 
