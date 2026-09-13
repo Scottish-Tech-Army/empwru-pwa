@@ -1,10 +1,12 @@
 "use client";
 
-import Image from "next/image";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FullScreenLayout, PrimaryButton, WizardHeader } from "@/components";
+import { FullScreenLayout, WizardHeader } from "@/components";
 import { SECTIONS } from "../baseline/page";
 import { Sparkles } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { getSessionDisplayName } from "@/lib/user-display";
 
 /**
  * Onboarding Screen 1: Welcome & Value Proposition
@@ -14,6 +16,19 @@ import { Sparkles } from "lucide-react";
  */
 export default function WelcomePage() {
   const router = useRouter();
+  const [displayName, setDisplayName] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (active) setDisplayName(getSessionDisplayName(session));
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleOnboardingWelcomeNext = () => {
     // Will navigate to baseline quiz in Chunk 3
@@ -58,9 +73,10 @@ export default function WelcomePage() {
               </span>
 
               {/* Animated Name + Sparkle */}
-              <span className="flex items-center gap-1 sm:gap-3 md:gap-4">
-                <span
-                  className="
+              {displayName && (
+                <span className="flex items-center gap-1 sm:gap-3 md:gap-4">
+                  <span
+                    className="
         bg-brand-gradient
         bg-clip-text
         text-transparent
@@ -68,13 +84,14 @@ export default function WelcomePage() {
         font-bold
         text-[1.08em] sm:text-[1.1em] md:text-[1.15em]
       "
-                >
-                  Nicola
-                </span>
+                  >
+                    {displayName}
+                  </span>
 
-                {/* Sparkle */}
-                <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-brand-primary shrink-0 animate-sparkle" />
-              </span>
+                  {/* Sparkle */}
+                  <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-brand-primary shrink-0 animate-sparkle" />
+                </span>
+              )}
 
             </h1>
 

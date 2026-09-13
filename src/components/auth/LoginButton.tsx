@@ -1,16 +1,12 @@
 'use client'
 
-import { useRouter } from "next/navigation";
-
-
+// Google OAuth isn't wired up yet — this is an inert placeholder (like the
+// Facebook button next to it) until real Supabase OAuth is implemented.
+// It must NOT navigate into onboarding without an actual session, or the
+// app guard bounces straight back out to /welcome.
 export function LoginButton({ type }: { type: "signup" | "signin" }) {
-  const router = useRouter();
-  const signIn = async () => {
-    router.push("/onboarding/welcome");
-  }
-
   return (<button
-    onClick={signIn}
+    onClick={() => {}}
     className="w-full flex items-center justify-center gap-2 border border-gray-200 rounded-md py-3 px-4 text-sm font-medium hover:bg-gray-100 transition"
   >
     <img

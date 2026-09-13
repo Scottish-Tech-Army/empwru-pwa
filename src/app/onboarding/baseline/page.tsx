@@ -20,7 +20,9 @@ import {
   type BaselineResponse,
   SkillsCurrentStatus,
 } from "@/lib/storage";
-import { loadBaselineForCurrentUser, saveBaselineToSupabase } from "@/lib/baseline";
+import { loadBaselineHistoryForCurrentUser, saveBaselineToSupabase, type BaselineHistoryEntry } from "@/lib/baseline";
+import { generateBaselineInsight, getMetricDeltas } from "@/lib/baseline-insights";
+import { BaselineRingsGrid } from "@/components/ui/BaselineRingsGrid";
 import { Sunrise, Sunset, Sparkles, Lightbulb, ChevronLeft } from "lucide-react";
 
 // =============================================================================
@@ -87,7 +89,7 @@ export default function BaselinePage() {
   const router = useRouter();
   const [currentSection, setCurrentSection] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
-  const [baseline, setBaseline] = useState<BaselineResponse | null>(null);
+  const [history, setHistory] = useState<BaselineHistoryEntry[]>([]);
 
   // Form state - all questions
   const [responses, setResponses] = useState<Partial<BaselineResponse>>({});
@@ -99,10 +101,9 @@ export default function BaselinePage() {
 
   useEffect(() => {
     const hydrateBaseline = async () => {
-      const result = await loadBaselineForCurrentUser();
-      const savedBaseline = result.baseline;
-      if (savedBaseline && Object.keys(savedBaseline).length > 0) {
-        setBaseline(savedBaseline);
+      const result = await loadBaselineHistoryForCurrentUser();
+      if (result.length > 0) {
+        setHistory(result);
         setShowSummary(true);
       }
     };
@@ -153,6 +154,14 @@ export default function BaselinePage() {
     router.push("/");
   };
 
+  const handleRetake = () => {
+    setResponses({});
+    setReminderDay(null);
+    setReminderTime(null);
+    setCurrentSection(0);
+    setShowSummary(false);
+  };
+
   const handleBack = () => {
     if (currentSection > 0) {
       setCurrentSection(currentSection - 1);
@@ -200,7 +209,12 @@ export default function BaselinePage() {
   }
 
   // Show summary view if baseline data exists
-  if (showSummary && baseline) {
+  if (showSummary && history.length > 0) {
+    const latest = history[history.length - 1];
+    const baseline = latest.responses;
+    const insight = generateBaselineInsight(history);
+    const deltas = history.length >= 2 ? getMetricDeltas(history[0].responses, baseline) : [];
+
     return (
       <FullScreenLayout bgClass="bg-white">
         <div className="max-w-5xl mx-auto px-6 py-8 w-full">
@@ -211,49 +225,100 @@ export default function BaselinePage() {
           </div>
 
           {/* Status Message */}
-          <div className="bg-brand-primary/10 rounded-2xl p-4 mb-6 border border-brand-primary/20">
+          <div className="bg-brand-primary/10 rounded-2xl p-4 mb-8 border border-brand-primary/20">
             <div className="flex gap-3">
               <Sparkles className="w-5 h-5 text-brand-primary flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm text-brand-primary font-medium">
-                  Your About U checkin was completed on {baseline.completedAt ? new Date(baseline.completedAt).toLocaleDateString() : "—"}.
+                  Your About U checkin was completed on {latest.completedAt ? new Date(latest.completedAt).toLocaleDateString() : "—"}.
                 </p>
-                <p className="text-xs text-brand-primary/70 mt-1">Your next checkin will be available after 90 days on {baseline.completedAt ? new Date(new Date(baseline.completedAt).getTime() + 90 * 24 * 60 * 60 * 1000).toLocaleDateString() : "—"}.</p>
+                <p className="text-xs text-brand-primary/70 mt-1">Your next checkin will be available after 90 days on {latest.completedAt ? new Date(new Date(latest.completedAt).getTime() + 90 * 24 * 60 * 60 * 1000).toLocaleDateString() : "—"}.</p>
               </div>
             </div>
           </div>
 
-          {/* Metrics */}
-          <div className="space-y-4 mb-8">
-            <div className="bg-white rounded-2xl p-5 border border-gray-100">
-              <p className="text-xs font-bold text-brand-primary uppercase tracking-wide mb-3">Wellbeing</p>
-              <p className="text-4xl font-bold text-[var(--color-charcoal)]">{baseline.energyLevel ?? "—"}<span className="text-xl text-text-muted">/5</span></p>
-            </div>
+          {/* Latest response */}
+          <div className="mb-8">
+            <p className="text-sm font-bold text-[var(--color-charcoal)] uppercase tracking-wide mb-4">Latest response</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white rounded-xl p-4 border border-gray-100 text-center">
+                <p className="text-[11px] font-bold text-brand-primary uppercase tracking-wide mb-1.5">Wellbeing</p>
+                <p className="text-2xl font-bold text-[var(--color-charcoal)]">{baseline.energyLevel ?? "—"}<span className="text-sm text-text-muted">/5</span></p>
+              </div>
 
-            <div className="bg-white rounded-2xl p-5 border border-gray-100">
-              <p className="text-xs font-bold text-brand-primary uppercase tracking-wide mb-3">Satisfaction</p>
-              <p className="text-4xl font-bold text-[var(--color-charcoal)]">{baseline.situationSatisfaction ?? "—"}<span className="text-xl text-text-muted">/5</span></p>
-            </div>
+              <div className="bg-white rounded-xl p-4 border border-gray-100 text-center">
+                <p className="text-[11px] font-bold text-brand-primary uppercase tracking-wide mb-1.5">Satisfaction</p>
+                <p className="text-2xl font-bold text-[var(--color-charcoal)]">{baseline.situationSatisfaction ?? "—"}<span className="text-sm text-text-muted">/5</span></p>
+              </div>
 
-            <div className="bg-white rounded-2xl p-5 border border-gray-100">
-              <p className="text-xs font-bold text-brand-primary uppercase tracking-wide mb-3">Confidence</p>
-              <p className="text-4xl font-bold text-[var(--color-charcoal)]">{baseline.confidence ?? "—"}<span className="text-xl text-text-muted">/5</span></p>
-            </div>
+              <div className="bg-white rounded-xl p-4 border border-gray-100 text-center">
+                <p className="text-[11px] font-bold text-brand-primary uppercase tracking-wide mb-1.5">Confidence</p>
+                <p className="text-2xl font-bold text-[var(--color-charcoal)]">{baseline.confidence ?? "—"}<span className="text-sm text-text-muted">/5</span></p>
+              </div>
 
-            <div className="bg-white rounded-2xl p-5 border border-gray-100">
-              <p className="text-xs font-bold text-brand-primary uppercase tracking-wide mb-3">Future Clarity</p>
-              <p className="text-4xl font-bold text-[var(--color-charcoal)]">{baseline.futureClarity ?? "—"}<span className="text-xl text-text-muted">/5</span></p>
+              <div className="bg-white rounded-xl p-4 border border-gray-100 text-center">
+                <p className="text-[11px] font-bold text-brand-primary uppercase tracking-wide mb-1.5">Future Clarity</p>
+                <p className="text-2xl font-bold text-[var(--color-charcoal)]">{baseline.futureClarity ?? "—"}<span className="text-sm text-text-muted">/5</span></p>
+              </div>
             </div>
           </div>
 
-          {/* Back Button */}
-          <button
-            onClick={() => router.push("/progress")}
-            className="flex items-center gap-2 text-brand-primary font-semibold hover:text-brand-primary/80 transition"
-          >
-            <ChevronLeft className="w-5 h-5" />
-            Back to Progress
-          </button>
+          {/* Insights */}
+          {insight && (
+            <div className="mb-8">
+              <p className="text-sm font-bold text-[var(--color-charcoal)] uppercase tracking-wide mb-4">Insights</p>
+              <div className="space-y-4">
+                {insight.biggestGrowth && (
+                  <div className="rounded-3xl p-7 bg-brand-gradient">
+                    <p className="text-xs text-white/75 uppercase tracking-wider mb-2.5">Your biggest growth</p>
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="text-5xl text-white">+{insight.biggestGrowth.delta}</span>
+                      <span className="text-xl text-white">{insight.biggestGrowth.label}</span>
+                    </div>
+                    <p className="text-sm text-white/85 mt-2.5">
+                      Up from {insight.biggestGrowth.start} to {insight.biggestGrowth.now} since {history[0].completedAt ? new Date(history[0].completedAt).toLocaleDateString() : "—"}
+                    </p>
+                  </div>
+                )}
+
+                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+                  <p className="text-[15px] text-[var(--color-charcoal)] leading-relaxed">
+                    {insight.segments.map((segment, i) => (
+                      <span
+                        key={i}
+                        style={segment.tone ? { color: segment.tone === "riser" ? "var(--color-magenta)" : "#ec835a" } : undefined}
+                      >
+                        {segment.text}
+                      </span>
+                    ))}
+                  </p>
+                </div>
+
+                {deltas.length > 0 && (
+                  <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
+                    <BaselineRingsGrid deltas={deltas} />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center justify-between gap-4">
+            <button
+              onClick={() => router.push("/progress")}
+              className="flex items-center gap-2 text-brand-primary font-semibold hover:text-brand-primary/80 transition"
+            >
+              <ChevronLeft className="w-5 h-5" />
+              Back to Progress
+            </button>
+            <button
+              onClick={handleRetake}
+              className="py-3 px-5 bg-brand-primary text-white rounded-2xl font-semibold hover:bg-brand-primary/90 transition"
+            >
+              Retake baseline questions
+            </button>
+          </div>
         </div>
       </FullScreenLayout>
     );

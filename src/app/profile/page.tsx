@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { resetAllData } from "@/lib/storage";
+import { capitalizeWords } from "@/lib/user-display";
 import {
   ArrowLeft,
   Compass,
@@ -55,14 +56,12 @@ export default function ProfilePage() {
         data: { session },
       } = await supabase.auth.getSession();
 
-      if (!active) return;
-      if (!session) {
-        router.replace("/signIn");
-        return;
-      }
+      if (!active || !session) return;
 
       const metadataName = session.user.user_metadata?.display_name;
-      const name = metadataName || getInitialsFromEmail(session.user.email);
+      const name = metadataName
+        ? capitalizeWords(metadataName)
+        : getInitialsFromEmail(session.user.email);
       const nextInitials = getInitials(
         session.user.user_metadata?.first_name,
         session.user.user_metadata?.last_name,
@@ -112,7 +111,7 @@ export default function ProfilePage() {
 
       resetAllData();
       await supabase.auth.signOut();
-      router.replace("/signUp");
+      router.replace("/welcome");
     } catch (error) {
       console.error("Account deletion failed", error);
       setDeleteError(

@@ -19,6 +19,8 @@ import {
   GoalCategory,
   BaselineResponse,
 } from "@/lib/storage";
+import { loadBaselineForCurrentUser } from "@/lib/baseline";
+import { EnergyTrendCard } from "@/components/ui/EnergyTrendCard";
 import {
   Flame,
   Sparkles,
@@ -95,7 +97,7 @@ export default function ProgressPage() {
   const router = useRouter();
   
   // Use lazy initializers that are safe for SSR
-  const [baseline] = useState<BaselineResponse>(() => 
+  const [baseline, setBaseline] = useState<BaselineResponse>(() =>
     typeof window !== 'undefined' ? getBaselineResponse() : {}
   );
   const [checkIns, setCheckIns] = useState<CheckIn[]>(() =>
@@ -125,6 +127,13 @@ export default function ProgressPage() {
         setMomentum(getMomentumDays());
       })
       .catch((error) => console.error("Failed to load check-ins from Supabase", error));
+
+    loadBaselineForCurrentUser()
+      .then((result) => {
+        if (!isMounted) return;
+        setBaseline(result.baseline);
+      })
+      .catch((error) => console.error("Failed to load baseline from Supabase", error));
 
     return () => {
       isMounted = false;
@@ -552,6 +561,8 @@ export default function ProgressPage() {
                 </div>
               )}
             </section>
+
+            <EnergyTrendCard checkIns={checkIns} />
 
             {/* Section 4: Review where you started */}
             <section className="mb-6">

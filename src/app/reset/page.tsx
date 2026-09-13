@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { resetAllData } from "@/lib/storage";
+import { supabase } from "@/lib/supabase";
 import { RefreshCw } from "lucide-react";
 
 /**
@@ -13,12 +14,21 @@ export default function ResetPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Clear all localStorage data
-    resetAllData();
+    async function reset() {
+      // Clear all localStorage data
+      resetAllData();
 
-    // Redirect to onboarding
-    setTimeout(() => {
+      // Sign out too — otherwise a still-valid cached session (e.g. the
+      // user row was deleted directly in the DB rather than through the
+      // app) leaves the auth guard thinking you're still signed in, and
+      // it sends you into onboarding instead of the actual fresh start.
+      await supabase.auth.signOut();
+
       router.replace("/welcome");
+    }
+
+    setTimeout(() => {
+      void reset();
     }, 500);
   }, [router]);
 

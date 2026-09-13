@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Montserrat } from "next/font/google";
 import "./globals.css";
+import AppGuard from "@/components/auth/AppGuard";
 
 /**
  * Montserrat - Regular weight only
@@ -41,7 +42,7 @@ export default function RootLayout({
       <body className={`${montserrat.variable} antialiased bg-gray-100`}>
         {/* Max-width container for responsive layout */}
         <div className="max-w-6xl mx-auto bg-brand-surface min-h-dvh">
-          {children}
+          <AppGuard>{children}</AppGuard>
         </div>
       </body>
     </html>

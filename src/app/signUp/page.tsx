@@ -17,7 +17,6 @@ export default function SignupPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
 
   const handleCreateAccount = async () => {
     if (password !== confirmPassword) {
@@ -47,15 +46,14 @@ export default function SignupPage() {
     }
 
     setErrorMessage("");
-    console.log(data);
     if (data.session) {
-      // Email confirmation is NOT required.
-      // User is already signed in. Show a success popup before sending
-      // them to sign in.
-      setShowSuccess(true);
+      // Email confirmation is NOT required — user is already signed in,
+      // so take them straight into onboarding instead of back through
+      // sign in.
+      router.push("/onboarding/welcome");
     } else if (data.user) {
-      // Email confirmation IS required.
-      // Show "Check your email" popup.
+      // Email confirmation IS required. Show "Check your email" popup;
+      // they'll land in onboarding automatically once they sign in.
       setShowConfirmation(true);
     }
   };
@@ -198,33 +196,6 @@ export default function SignupPage() {
         </Link>
         .
       </p>
-
-      {showSuccess && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4">
-          <div className="w-full max-w-sm rounded-[32px] bg-white p-6 text-center shadow-[0_25px_60px_rgba(0,0,0,0.12)] ring-1 ring-black/10">
-            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-[var(--color-magenta)]">
-              Account created
-            </p>
-            <h2 className="mt-4 text-2xl font-bold text-[var(--color-charcoal)]">
-              You&apos;re all set
-            </h2>
-            <p className="mt-3 text-sm leading-7 text-[rgba(3,3,3,0.75)]">
-              Your account has been created successfully. Sign in to get
-              started.
-            </p>
-            <button
-              type="button"
-              onClick={() => {
-                setShowSuccess(false);
-                router.push("/signIn");
-              }}
-              className="mt-6 w-full rounded-2xl bg-brand-primary px-6 py-3 text-sm font-semibold text-white transition hover:bg-brand-primary/90"
-            >
-              Go to sign in
-            </button>
-          </div>
-        </div>
-      )}
 
       {showConfirmation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4">

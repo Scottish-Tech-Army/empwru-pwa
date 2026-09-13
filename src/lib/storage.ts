@@ -138,6 +138,18 @@ if (isBrowser()) {
 }
 
 /**
+ * Prime per-user storage scoping from a session already resolved elsewhere
+ * (the top-level auth/onboarding guard), so a scoped read like
+ * `isOnboardingCompleted()` reflects the right account immediately instead
+ * of waiting on the `onAuthStateChange` listener to catch up — the same
+ * race `getCurrentUserId()` above guards against for this module's own
+ * calls.
+ */
+export function primeStorageUserScope(userId: string | null): void {
+  updateCurrentUserId(userId);
+}
+
+/**
  * Whether `key` is still within its "first day seen" grace period for the
  * current user — the calendar day it was first checked, recorded once and
  * never overwritten again.
