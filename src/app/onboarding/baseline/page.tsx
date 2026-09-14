@@ -16,6 +16,7 @@ import {
   saveOnboardingState,
   completeOnboarding,
   getBaselineResponse,
+  BASELINE_REMINDER_INTERVAL_DAYS,
   type WorkStatus,
   type BaselineResponse,
   SkillsCurrentStatus,
@@ -98,6 +99,7 @@ export default function BaselinePage() {
   const [reminderDay, setReminderDay] = useState<ReminderDay | null>(null);
   const [reminderTime, setReminderTime] = useState<ReminderTime | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [now] = useState(() => Date.now());
 
   useEffect(() => {
     const hydrateBaseline = async () => {
@@ -215,6 +217,11 @@ export default function BaselinePage() {
     const insight = generateBaselineInsight(history);
     const deltas = history.length >= 2 ? getMetricDeltas(history[0].responses, baseline) : [];
 
+    const nextRetakeDate = latest.completedAt
+      ? new Date(new Date(latest.completedAt).getTime() + BASELINE_REMINDER_INTERVAL_DAYS * 24 * 60 * 60 * 1000)
+      : null;
+    const retakeDue = nextRetakeDate ? nextRetakeDate.getTime() <= now : true;
+
     return (
       <FullScreenLayout bgClass="bg-white">
         <div className="max-w-5xl mx-auto px-6 py-8 w-full">
@@ -232,7 +239,11 @@ export default function BaselinePage() {
                 <p className="text-sm text-brand-primary font-medium">
                   Your About U checkin was completed on {latest.completedAt ? new Date(latest.completedAt).toLocaleDateString() : "—"}.
                 </p>
-                <p className="text-xs text-brand-primary/70 mt-1">Your next checkin will be available after 90 days on {latest.completedAt ? new Date(new Date(latest.completedAt).getTime() + 90 * 24 * 60 * 60 * 1000).toLocaleDateString() : "—"}.</p>
+                <p className="text-xs text-brand-primary/70 mt-1">
+                  {retakeDue
+                    ? "Your next checkin is ready whenever U are."
+                    : `Your next checkin will be available after 6 weeks on ${nextRetakeDate?.toLocaleDateString() ?? "—"}.`}
+                </p>
               </div>
             </div>
           </div>
@@ -314,7 +325,9 @@ export default function BaselinePage() {
             </button>
             <button
               onClick={handleRetake}
-              className="py-3 px-5 bg-brand-primary text-white rounded-2xl font-semibold hover:bg-brand-primary/90 transition"
+              disabled={!retakeDue}
+              title={retakeDue ? undefined : `Available again on ${nextRetakeDate?.toLocaleDateString() ?? "—"}`}
+              className="py-3 px-5 bg-brand-primary text-white rounded-2xl font-semibold hover:bg-brand-primary/90 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-brand-primary"
             >
               Retake baseline questions
             </button>

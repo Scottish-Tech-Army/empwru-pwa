@@ -329,7 +329,7 @@ export function completeBaseline(): void {
   saveBaselineResponse({ completedAt: new Date().toISOString() });
 }
 
-const BASELINE_REMINDER_INTERVAL_DAYS = 42; // 6 weeks
+export const BASELINE_REMINDER_INTERVAL_DAYS = 42; // 6 weeks
 
 /**
  * Days elapsed since the baseline quiz was last completed, or null if it's
