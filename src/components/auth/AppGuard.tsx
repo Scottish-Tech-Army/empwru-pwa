@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { isOnboardingCompleted, primeStorageUserScope } from "@/lib/storage";
+import { completeOnboarding, isOnboardingCompleted, primeStorageUserScope } from "@/lib/storage";
+import { hasCompletedBaselineOnServer } from "@/lib/baseline";
 
 // Reachable with no session — the pre-auth marketing/signup chain.
 const PUBLIC_ROUTES = ["/welcome", "/onboarding/carousel", "/signIn", "/signUp"];
@@ -74,12 +75,27 @@ export default function AppGuard({ children }: { children: React.ReactNode }) {
       }
 
       if (!isOnboardingCompleted()) {
-        if (!matches(pathname, ONBOARDING_ROUTES)) {
-          router.replace("/onboarding/welcome");
+        // The local flag only ever gets set by finishing the onboarding
+        // wizard on this exact device, so it's blank for a returning user
+        // on a new device, a cleared browser, etc. Before assuming they're
+        // new, check whether they already have a baseline on record —
+        // otherwise they'd be routed into onboarding on every such device
+        // with no way back out (the baseline step recognises their history
+        // and offers no "continue" action, only retake/back-to-progress,
+        // both of which this same check would keep bouncing).
+        const alreadyOnboarded = await hasCompletedBaselineOnServer();
+        if (!active) return;
+
+        if (alreadyOnboarded) {
+          completeOnboarding();
+        } else {
+          if (!matches(pathname, ONBOARDING_ROUTES)) {
+            router.replace("/onboarding/welcome");
+            return;
+          }
+          setReadyFor(pathname);
           return;
         }
-        setReadyFor(pathname);
-        return;
       }
 
       if (matches(pathname, PUBLIC_ROUTES) || matches(pathname, ONBOARDING_ROUTES)) {

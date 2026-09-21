@@ -82,6 +82,32 @@ export async function loadBaselineForCurrentUser(): Promise<BaselineLoadResult> 
 }
 
 /**
+ * Whether the current user has ever completed the baseline quiz, per
+ * Supabase — independent of the local `empwru:onboarding` flag AppGuard
+ * normally checks. Used to recognise a returning user on a device that
+ * never had that flag set (new device, cleared storage, etc.) instead of
+ * routing them back into onboarding despite already having a baseline.
+ */
+export async function hasCompletedBaselineOnServer(): Promise<boolean> {
+  const userId = await getCurrentUserId();
+  if (!userId) return false;
+
+  const { data, error } = await supabase
+    .from("baseline_responses")
+    .select("completed_at")
+    .eq("user_id", userId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to check baseline completion on Supabase", error);
+    return false;
+  }
+
+  return data != null;
+}
+
+/**
  * Every baseline completion for the current user, oldest first — the very
  * first entry is "where you started"; the last is "where you are now".
  * Used by the progress page's start-vs-now comparison.
