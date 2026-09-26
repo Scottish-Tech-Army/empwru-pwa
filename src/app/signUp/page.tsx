@@ -1,7 +1,6 @@
 "use client";
 
 import { PasswordInput, PrimaryButton } from "@/components";
-import { LoginButton } from "@/components/auth/LoginButton";
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
@@ -76,39 +75,13 @@ export default function SignupPage() {
         Create your account
       </h1>
 
-      {/* Add space between title and buttons */}
-      <div className="w-full max-w-sm mt-6 space-y-4">
-        {/* OAuth Buttons */}
-        <LoginButton type="signup" />
-
-        <button
-          onClick={() => {}}
-          className="w-full flex items-center justify-center gap-2 border border-gray-200 rounded-md py-3 px-4 text-sm font-medium hover:bg-gray-100 transition"
-        >
-          <img
-            src="/facebook.png"
-            alt="Facebook"
-            className="w-5 h-5"
-            loading="lazy"
-          />
-          Sign up with Facebook
-        </button>
-      </div>
-
-      {/* Separator */}
-      <div className="flex items-center w-full max-w-sm my-8">
-        <hr className="flex-grow border-gray-300" />
-        <span className="mx-3 text-gray-400 text-base">or</span>
-        <hr className="flex-grow border-gray-300" />
-      </div>
-
       {/* Email/Password form */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
           handleCreateAccount();
         }}
-        className="w-full max-w-sm flex flex-col gap-6"
+        className="w-full max-w-sm flex flex-col gap-6 mt-6"
       >
         <div className="flex gap-4">
           <label className="block flex-1 text-base text-text-muted">
