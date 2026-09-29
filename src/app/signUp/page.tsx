@@ -161,15 +161,6 @@ export default function SignupPage() {
         </Link>
       </p>
 
-      {/* Terms of use */}
-      <p className="text-center text-xs text-text-muted max-w-xs mt-4">
-        By creating an account, you agree to our{" "}
-        <Link href="/terms" className="underline text-[var(--color-charcoal)]">
-          terms of use
-        </Link>
-        .
-      </p>
-
       {showConfirmation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4">
           <div className="w-full max-w-sm rounded-[32px] bg-white p-6 text-center shadow-[0_25px_60px_rgba(0,0,0,0.12)] ring-1 ring-black/10">

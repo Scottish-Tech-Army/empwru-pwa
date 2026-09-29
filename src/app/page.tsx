@@ -16,7 +16,9 @@ import {
   isDiscoveryPopulated,
   loadGoalsFromSupabase,
   loadCheckInsFromSupabase,
+  loadDiscoveryDataFromSupabase,
 } from "@/lib/storage";
+import { loadBaselineForCurrentUser } from "@/lib/baseline";
 import { supabase } from "@/lib/supabase";
 import { capitalizeWords, getDisplayNameFromEmail } from "@/lib/user-display";
 
@@ -70,6 +72,18 @@ export default function DashboardPage() {
       await loadCheckInsFromSupabase();
     } catch (error) {
       console.error("Failed to refresh dashboard check-ins", error);
+    }
+
+    try {
+      await loadBaselineForCurrentUser();
+    } catch (error) {
+      console.error("Failed to refresh dashboard baseline status", error);
+    }
+
+    try {
+      await loadDiscoveryDataFromSupabase();
+    } catch (error) {
+      console.error("Failed to refresh dashboard discovery data", error);
     }
 
     setShowCheckInPrompt(!hasCheckedInThisWeek());

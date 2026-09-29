@@ -2,6 +2,8 @@ import { supabase } from "@/lib/supabase";
 import {
   getBaselineResponse,
   saveBaselineResponse,
+  replaceBaselineResponse,
+  clearBaselineResponse,
   type BaselineResponse,
 } from "@/lib/storage";
 
@@ -68,16 +70,23 @@ export async function loadBaselineForCurrentUser(): Promise<BaselineLoadResult> 
 
   if (data?.responses) {
     const baseline = data.responses as BaselineResponse;
-    saveBaselineResponse(baseline);
+    // A full replace, not a merge — the DB row is the authoritative
+    // snapshot, so any locally-cached fields it no longer has shouldn't
+    // survive the hydration either.
+    replaceBaselineResponse(baseline);
     return {
       baseline,
       source: "supabase",
     };
   }
 
+  // No completed baseline on the server — mirror that locally too, otherwise
+  // a baseline completed earlier (whose row was since deleted, e.g. in a
+  // test) keeps reading as "done" from the local cache forever.
+  clearBaselineResponse();
   return {
-    baseline: getBaselineResponse(),
-    source: "local-storage",
+    baseline: {},
+    source: "supabase",
   };
 }
 

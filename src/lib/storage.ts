@@ -323,6 +323,27 @@ export function saveBaselineResponse(response: Partial<BaselineResponse>): void 
 }
 
 /**
+ * Overwrite the local baseline cache wholesale with a Supabase result,
+ * rather than merging onto whatever is already cached. Used when hydrating
+ * from the server, where the DB row is the full, authoritative snapshot.
+ */
+export function replaceBaselineResponse(response: BaselineResponse): void {
+  if (!isBrowser()) return;
+  localStorage.setItem(scopedKey(STORAGE_KEYS.BASELINE), JSON.stringify(response));
+}
+
+/**
+ * Clear the local baseline cache entirely. Used when a Supabase hydration
+ * finds no completed baseline for the user — otherwise a locally-cached
+ * completion (e.g. from a row since deleted on the server) lingers forever,
+ * since `saveBaselineResponse` only ever merges onto existing local data.
+ */
+export function clearBaselineResponse(): void {
+  if (!isBrowser()) return;
+  localStorage.removeItem(scopedKey(STORAGE_KEYS.BASELINE));
+}
+
+/**
  * Mark baseline as completed with timestamp
  */
 export function completeBaseline(): void {
@@ -1102,9 +1123,31 @@ export function getDaysSinceLastCheckIn(): number | null {
   return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
 }
 
+// The hour (24h, local time) each reminder-time preference maps to: 10am for
+// "morning", 6pm for "evening".
+const REMINDER_HOUR_BY_TIME: Record<"morning" | "evening", number> = {
+  morning: 10,
+  evening: 18,
+};
+
 /**
- * Whether the weekly check-in reminder popup should be shown: due this week
- * and not already dismissed for this specific week (re-prompts next week).
+ * Whether the current local time has reached the user's preferred check-in
+ * reminder slot for today. Users who never set a preference (accounts that
+ * predate this, or who skipped the reminder step) aren't gated at all — the
+ * reminder keeps showing any time of day, as it always has.
+ */
+function isPastPreferredReminderTime(): boolean {
+  const { reminderTime } = getOnboardingState();
+  if (!reminderTime) return true;
+
+  return new Date().getHours() >= REMINDER_HOUR_BY_TIME[reminderTime];
+}
+
+/**
+ * Whether the weekly check-in reminder popup should be shown: due this week,
+ * not already dismissed for this specific week (re-prompts next week), and
+ * not before the user's chosen reminder time of day (10am for "morning",
+ * 6pm for "evening").
  *
  * The first calendar day this would ever show for a given user is skipped
  * entirely — they've just been through onboarding, so one more popup right
@@ -1115,6 +1158,7 @@ export function shouldShowCheckInReminder(): boolean {
   if (!isBrowser()) return false;
   if (hasCheckedInThisWeek()) return false;
   if (isWithinFirstSeenDay(STORAGE_KEYS.CHECKIN_REMINDER_INTRO_SEEN)) return false;
+  if (!isPastPreferredReminderTime()) return false;
 
   const dismissedWeek = localStorage.getItem(scopedKey(STORAGE_KEYS.CHECKIN_REMINDER_DISMISSED));
   const currentWeekKey = getWeekStart(new Date()).toISOString();
@@ -1270,28 +1314,6 @@ export function getDiscoveryData(): DiscoveryData {
   }
 }
 
-async function getDiscoveryDataFromSupabase(): Promise<DiscoveryData | null> {
-  if (!isBrowser()) return null;
-
-  const userId = await getCurrentUserId();
-  if (!userId) return null;
-
-  const { data, error } = await supabase
-    .from("discovery_data")
-    .select("payload")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (error) {
-    console.error("Failed to load discovery data from Supabase", error);
-    return null;
-  }
-
-  if (!data?.payload) return null;
-
-  return data.payload as DiscoveryData;
-}
-
 export async function syncDiscoveryDataToSupabase(data: DiscoveryData): Promise<void> {
   if (!isBrowser()) return;
 
@@ -1317,13 +1339,28 @@ export async function syncDiscoveryDataToSupabase(data: DiscoveryData): Promise<
 }
 
 export async function loadDiscoveryDataFromSupabase(): Promise<DiscoveryData> {
-  const remoteData = await getDiscoveryDataFromSupabase();
-  if (remoteData) {
-    localStorage.setItem(scopedKey(STORAGE_KEYS.DISCOVERY), JSON.stringify(remoteData));
-    return remoteData;
+  if (!isBrowser()) return getDiscoveryData();
+
+  const userId = await getCurrentUserId();
+  if (!userId) return getDiscoveryData();
+
+  const { data, error } = await supabase
+    .from("discovery_data")
+    .select("payload")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Failed to load discovery data from Supabase", error);
+    return getDiscoveryData();
   }
 
-  return getDiscoveryData();
+  const remoteData = (data?.payload as DiscoveryData | undefined) ?? DEFAULT_DISCOVERY;
+
+  // Always mirror the remote result locally, including empty results —
+  // otherwise a deleted discovery_data row leaves stale cached entries behind.
+  localStorage.setItem(scopedKey(STORAGE_KEYS.DISCOVERY), JSON.stringify(remoteData));
+  return remoteData;
 }
 
 /**

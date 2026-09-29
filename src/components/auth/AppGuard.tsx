@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { completeOnboarding, isOnboardingCompleted, primeStorageUserScope } from "@/lib/storage";
+import { isOnboardingCompleted, primeStorageUserScope, saveOnboardingState } from "@/lib/storage";
 import { hasCompletedBaselineOnServer } from "@/lib/baseline";
+import { hydrateFromSupabase } from "@/lib/hydrate";
 
 // Reachable with no session — the pre-auth marketing/signup chain.
 const PUBLIC_ROUTES = ["/welcome", "/onboarding/carousel", "/signIn", "/signUp"];
@@ -42,6 +43,10 @@ export default function AppGuard({ children }: { children: React.ReactNode }) {
   // (rather than a plain boolean) so a slow check for a *new* pathname
   // can't render stale content by inheriting the previous pathname's "ready".
   const [readyFor, setReadyFor] = useState<string | null>(null);
+  // Which signed-in user's data has already been pulled from Supabase this
+  // session, so a route change doesn't re-trigger it — only a fresh sign-in
+  // (a different or newly-present user id) does.
+  const hydratedUserId = useRef<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -61,6 +66,7 @@ export default function AppGuard({ children }: { children: React.ReactNode }) {
       primeStorageUserScope(session?.user?.id ?? null);
 
       if (!session) {
+        hydratedUserId.current = null;
         if (!matches(pathname, PUBLIC_ROUTES)) {
           router.replace("/welcome");
           return;
@@ -69,33 +75,39 @@ export default function AppGuard({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      if (hydratedUserId.current !== session.user.id) {
+        await hydrateFromSupabase();
+        if (!active) return;
+
+        // Reconcile the local "onboarding completed" flag against the server
+        // once per session. It's sticky by design — set once when the wizard
+        // finishes on this device and otherwise trusted, so routing doesn't
+        // need a server round trip on every navigation — but that means it
+        // can go stale in *either* direction: blank for a returning user on
+        // a new device (handled below, same as before), or stuck `true` for
+        // a user whose baseline was since deleted server-side, who would
+        // otherwise never be routed back into onboarding at all. Checking
+        // once per sign-in catches both without paying for a check on every
+        // route change.
+        const completedOnServer = await hasCompletedBaselineOnServer();
+        if (!active) return;
+        saveOnboardingState({ completed: completedOnServer });
+
+        hydratedUserId.current = session.user.id;
+      }
+
       if (matches(pathname, ALWAYS_AUTH_ROUTES)) {
         setReadyFor(pathname);
         return;
       }
 
       if (!isOnboardingCompleted()) {
-        // The local flag only ever gets set by finishing the onboarding
-        // wizard on this exact device, so it's blank for a returning user
-        // on a new device, a cleared browser, etc. Before assuming they're
-        // new, check whether they already have a baseline on record —
-        // otherwise they'd be routed into onboarding on every such device
-        // with no way back out (the baseline step recognises their history
-        // and offers no "continue" action, only retake/back-to-progress,
-        // both of which this same check would keep bouncing).
-        const alreadyOnboarded = await hasCompletedBaselineOnServer();
-        if (!active) return;
-
-        if (alreadyOnboarded) {
-          completeOnboarding();
-        } else {
-          if (!matches(pathname, ONBOARDING_ROUTES)) {
-            router.replace("/onboarding/welcome");
-            return;
-          }
-          setReadyFor(pathname);
+        if (!matches(pathname, ONBOARDING_ROUTES)) {
+          router.replace("/onboarding/welcome");
           return;
         }
+        setReadyFor(pathname);
+        return;
       }
 
       if (matches(pathname, PUBLIC_ROUTES) || matches(pathname, ONBOARDING_ROUTES)) {
