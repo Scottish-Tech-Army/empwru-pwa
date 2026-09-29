@@ -452,6 +452,7 @@ export interface Goal {
 
   // Progress
   status: "active" | "completed" | "paused";
+  completedAt?: string; // ISO date, set when status transitions to "completed"
   steps: Step[];
   milestones?: Step[]; // Keep for data migration/compatibility
   actions: Action[];
@@ -505,6 +506,7 @@ function mapGoalFromSupabase(row: Record<string, unknown>): Goal {
     holdingBack: row.holding_back ? String(row.holding_back) : undefined,
     createdAt: String(row.created_at ?? new Date().toISOString()),
     status: (row.status as Goal["status"]) ?? "active",
+    completedAt: row.completed_at ? String(row.completed_at) : undefined,
     steps: Array.isArray(row.steps) ? (row.steps as Step[]) : [],
     milestones: Array.isArray(row.steps) ? (row.steps as Step[]) : [],
     actions: Array.isArray(row.actions) ? (row.actions as Action[]) : [],
@@ -526,6 +528,7 @@ function mapGoalForSupabase(goal: Goal, userId: string) {
     created_at: goal.createdAt,
     updated_at: new Date().toISOString(),
     status: goal.status,
+    completed_at: goal.completedAt ?? null,
     steps: goal.steps ?? [],
     actions: goal.actions ?? [],
   };
@@ -1088,7 +1091,7 @@ export function toggleCheckInLike(
 /**
  * Get the start of the current week (Monday)
  */
-function getWeekStart(date: Date): Date {
+export function getWeekStart(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);

@@ -76,7 +76,6 @@ export default function GoalsPage() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isSortOpen, setIsSortOpen] = useState(false);
   const [filters, setFilters] = useState<GoalFilterState>(DEFAULT_FILTERS);
-  const [period, setPeriod] = useState<"week" | "month" | "year">("week");
 
   // Apply filters and sort to goals
   const processedGoals = useMemo(() => {
@@ -279,25 +278,10 @@ export default function GoalsPage() {
             {/* Active Goals */}
             {activeGoals.length > 0 && (
               <section className="mb-8">
-                <div className="flex items-center justify-between mb-3 mx-4">
+                <div className="mb-3 mx-4">
                   <h3 className="text-sm text-text-muted uppercase tracking-wide">
                     Active ({activeGoals.length})
                   </h3>
-                  <div className="flex gap-1 bg-gray-100 rounded-lg p-1 shadow-[0_0_15px_rgba(0,0,0,0.08)]">
-                    {(["week", "month", "year"] as const).map((p) => (
-                      <button
-                        key={p}
-                        onClick={() => setPeriod(p)}
-                        className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                          period === p
-                            ? "bg-white text-[var(--color-charcoal)] shadow-sm"
-                            : "text-text-muted hover:text-[var(--color-charcoal)]"
-                        }`}
-                      >
-                        {p.charAt(0).toUpperCase() + p.slice(1)}
-                      </button>
-                    ))}
-                  </div>
                 </div>
                 <div className="space-y-4">
                   {activeGoals.map((goal) => (

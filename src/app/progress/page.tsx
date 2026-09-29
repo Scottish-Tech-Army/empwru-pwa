@@ -11,6 +11,7 @@ import {
   getGoals,
   getLastCheckIn,
   getMomentumDays,
+  getWeekStart,
   loadCheckInsFromSupabase,
   toggleCheckInLike,
   hasCheckedInThisWeek,
@@ -147,6 +148,17 @@ export default function ProgressPage() {
   const completedSteps = goals.reduce(
     (sum, g) => sum + g.steps.filter((s) => s.completed).length,
     0
+  );
+
+  // Goals completed this calendar week (Mon-Sun) are "this week's win";
+  // everything else — including goals completed before completedAt existed —
+  // belongs in Overall achievements instead.
+  const currentWeekStart = getWeekStart(new Date());
+  const completedGoalsThisWeek = completedGoals.filter(
+    (g) => g.completedAt && new Date(g.completedAt) >= currentWeekStart
+  );
+  const completedGoalsEarlier = completedGoals.filter(
+    (g) => !g.completedAt || new Date(g.completedAt) < currentWeekStart
   );
 
   const goalCategoryCounts = completedGoals.reduce((acc, g) => {
@@ -301,75 +313,45 @@ export default function ProgressPage() {
                         Set your first goal
                       </button>
                     </div>
+                  ) : completedGoalsThisWeek.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <div className="w-12 h-12 bg-brand-primary/10 rounded-full flex items-center justify-center mb-3">
+                        <Sprout className="w-6 h-6 text-brand-primary" />
+                      </div>
+                      <p className="text-sm font-medium text-brand-primary mb-1">No wins yet this week</p>
+                      <p className="text-xs text-text-muted">Complete a goal to see it here.</p>
+                    </div>
                   ) : (
-                    <>
-                      {/* Completed goals section */}
-                      {completedGoals.length > 0 && (
-                        <div className="space-y-3">
-                          {completedGoals.map((goal) => {
-                            const totalSteps = goal.steps.length;
-                            const completedSteps = goal.steps.filter((s) => s.completed).length;
-                            const percent = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
-                            const ringStyle = {
-                              background: `conic-gradient(rgba(188, 3, 185, 0.85) ${percent}%, rgba(0,0,0,0.08) ${percent}% 100%)`,
-                            };
+                    <div className="space-y-3">
+                      {completedGoalsThisWeek.map((goal) => {
+                        const totalSteps = goal.steps.length;
+                        const completedSteps = goal.steps.filter((s) => s.completed).length;
+                        const percent = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
+                        const ringStyle = {
+                          background: `conic-gradient(rgba(188, 3, 185, 0.85) ${percent}%, rgba(0,0,0,0.08) ${percent}% 100%)`,
+                        };
 
-                            return (
-                              <div key={goal.id}>
-                                {/* Goal Completed Badge */}
-                                <div className="bg-brand-gradient rounded-xl p-3 text-white text-center mb-3 flex items-center justify-center gap-2">
-                                  <Sparkles className="w-4 h-4" />
-                                  <span className="text-sm font-medium">Goal Completed</span>
-                                </div>
+                        return (
+                          <div key={goal.id}>
+                            {/* Goal Completed Badge */}
+                            <div className="bg-brand-gradient rounded-xl p-3 text-white text-center mb-3 flex items-center justify-center gap-2">
+                              <Sparkles className="w-4 h-4" />
+                              <span className="text-sm font-medium">Goal Completed</span>
+                            </div>
 
-                                {/* Goal name and progress ring */}
-                                <div className="flex flex-col items-center text-center">
-                                  <p className="text-sm font-semibold text-[var(--color-charcoal)] mb-4">{goal.title}</p>
-                                  <div className="relative w-24 h-24 rounded-full" style={ringStyle}>
-                                    <div className="absolute inset-2 bg-white rounded-full flex items-center justify-center">
-                                      <span className="text-2xl font-bold text-[var(--color-charcoal)]">{percent}%</span>
-                                    </div>
-                                  </div>
+                            {/* Goal name and progress ring */}
+                            <div className="flex flex-col items-center text-center">
+                              <p className="text-sm font-semibold text-[var(--color-charcoal)] mb-4">{goal.title}</p>
+                              <div className="relative w-24 h-24 rounded-full" style={ringStyle}>
+                                <div className="absolute inset-2 bg-white rounded-full flex items-center justify-center">
+                                  <span className="text-2xl font-bold text-[var(--color-charcoal)]">{percent}%</span>
                                 </div>
                               </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {/* In-progress goals section */}
-                      {inProgressGoals.length > 0 && (
-                        <div className="mt-4 bg-[#4a0f7e]/5 rounded-xl p-4">
-                          <p className="text-sm font-bold text-[var(--color-charcoal)] mb-4">
-                            {inProgressGoals.length} goal{inProgressGoals.length !== 1 ? "s" : ""} in progress
-                          </p>
-                          <div className="grid grid-cols-2 gap-3">
-                            {inProgressGoals.map((goal) => {
-                              const totalSteps = goal.steps.length;
-                              const completedSteps = goal.steps.filter((s) => s.completed).length;
-                              const percent = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0;
-                              const ringStyle = {
-                                background: `conic-gradient(rgba(74, 15, 126, 0.85) ${percent}%, rgba(0,0,0,0.08) ${percent}% 100%)`,
-                              };
-
-                              return (
-                                <div
-                                  key={goal.id}
-                                  className="bg-white rounded-xl p-4 flex flex-col items-center text-center border border-gray-100"
-                                >
-                                  <p className="text-xs font-semibold text-[var(--color-charcoal)] mb-3">{goal.title}</p>
-                                  <div className="relative w-20 h-20 rounded-full" style={ringStyle}>
-                                    <div className="absolute inset-2 bg-white rounded-full flex items-center justify-center">
-                                      <span className="text-lg font-bold text-[var(--color-charcoal)]">{percent}%</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                    </>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
 
@@ -377,7 +359,7 @@ export default function ProgressPage() {
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h3 className="text-base font-semibold text-[var(--color-charcoal)]">This week&apos;s win</h3>
+                      <h3 className="text-base font-semibold text-[var(--color-charcoal)]">This week&apos;s reflection</h3>
                       <p className="text-xs text-text-muted">Capture what went well and what you learned.</p>
                     </div>
                     {thisWeekCheckIn && (
@@ -554,6 +536,90 @@ export default function ProgressPage() {
                           className="mt-4 w-full py-2 bg-brand-primary text-white rounded-xl text-sm font-semibold hover:bg-brand-primary/90 transition"
                         >
                           View all learnings
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {(inProgressGoals.length > 0 || completedGoalsEarlier.length > 0) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                  {inProgressGoals.length > 0 && (
+                    <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+                      <p className="text-base font-bold text-[var(--color-charcoal)] mb-4">Goals in progress</p>
+                      <div className="grid grid-cols-2 gap-3">
+                        {inProgressGoals.slice(0, 2).map((goal) => {
+                          const totalSteps = goal.steps.length;
+                          const goalCompletedSteps = goal.steps.filter((s) => s.completed).length;
+                          const percent = totalSteps > 0 ? Math.round((goalCompletedSteps / totalSteps) * 100) : 0;
+                          const ringStyle = {
+                            background: `conic-gradient(rgba(74, 15, 126, 0.85) ${percent}%, rgba(0,0,0,0.08) ${percent}% 100%)`,
+                          };
+
+                          return (
+                            <div
+                              key={goal.id}
+                              className="bg-gray-50 rounded-xl p-4 flex flex-col items-center text-center"
+                            >
+                              <p className="text-xs font-semibold text-[var(--color-charcoal)] mb-3">{goal.title}</p>
+                              <div className="relative w-20 h-20 rounded-full" style={ringStyle}>
+                                <div className="absolute inset-2 bg-white rounded-full flex items-center justify-center">
+                                  <span className="text-lg font-bold text-[var(--color-charcoal)]">{percent}%</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {inProgressGoals.length > 2 && (
+                        <button
+                          onClick={() => router.push("/goals")}
+                          className="mt-4 w-full py-2 bg-brand-primary text-white rounded-xl text-sm font-semibold hover:bg-brand-primary/90 transition"
+                        >
+                          View all in progress ({inProgressGoals.length})
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {completedGoalsEarlier.length > 0 && (
+                    <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm">
+                      <p className="text-base font-bold text-[var(--color-charcoal)] mb-4">Completed goals</p>
+                      <div className="space-y-3">
+                        {completedGoalsEarlier.slice(0, 2).map((goal) => {
+                          const totalSteps = goal.steps.length;
+                          const goalCompletedSteps = goal.steps.filter((s) => s.completed).length;
+                          const percent = totalSteps > 0 ? Math.round((goalCompletedSteps / totalSteps) * 100) : 0;
+                          const ringStyle = {
+                            background: `conic-gradient(rgba(188, 3, 185, 0.85) ${percent}%, rgba(0,0,0,0.08) ${percent}% 100%)`,
+                          };
+
+                          return (
+                            <div key={goal.id} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
+                              <div className="relative w-12 h-12 rounded-full shrink-0" style={ringStyle}>
+                                <div className="absolute inset-1.5 bg-white rounded-full flex items-center justify-center">
+                                  <span className="text-xs font-bold text-[var(--color-charcoal)]">{percent}%</span>
+                                </div>
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-semibold text-[var(--color-charcoal)] truncate">{goal.title}</p>
+                                {goal.completedAt && (
+                                  <p className="text-xs text-text-muted">
+                                    Completed {new Date(goal.completedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {completedGoalsEarlier.length > 2 && (
+                        <button
+                          onClick={() => router.push("/goals")}
+                          className="mt-4 w-full py-2 bg-brand-primary text-white rounded-xl text-sm font-semibold hover:bg-brand-primary/90 transition"
+                        >
+                          View all completed ({completedGoalsEarlier.length})
                         </button>
                       )}
                     </div>
