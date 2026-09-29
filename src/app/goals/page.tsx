@@ -11,7 +11,7 @@ import { GoalFilterState, DEFAULT_FILTERS, CATEGORIES, STATUS_OPTIONS } from "@/
 import UserInitialsBadge from "@/components/ui/UserInitialsBadge";
 
 import { Plus, SlidersHorizontal, RotateCcw, ArrowUpDown, Target } from "lucide-react";
-import { DottedEmptyState } from "@/components";
+import { DottedEmptyState, AICoachPromoCard } from "@/components";
 
 /**
  * Smart "At Risk" logic:
@@ -242,14 +242,15 @@ export default function GoalsPage() {
 
         {goals.length === 0 ? (
           /* Initial Empty State (No goals created) */
-          <section className="flex-1 flex flex-col pb-8 h-full">
+          <section className="flex-1 flex flex-col gap-6 pb-8">
             <DottedEmptyState
               href="/goals/new"
               title="Set your first goal"
               description="Start with something meaningful to you and track your journey to potential."
               icon={Plus}
-              className="flex-1 h-full"
+              className="flex-1"
             />
+            <AICoachPromoCard />
           </section>
         ) : processedGoals.length === 0 ? (
           /* Filtered Empty State (No matches) */

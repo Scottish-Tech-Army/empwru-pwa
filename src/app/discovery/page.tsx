@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Lightbulb, Wrench, Star, Heart, Compass, ChevronRight } from "lucide-react";
 import BottomNav from "@/components/ui/BottomNav";
 import { loadDiscoveryDataFromSupabase, type DiscoveryPillar } from "@/lib/storage";
-import { QuoteCard } from "@/components";
+import { QuoteCard, AICoachPromoCard } from "@/components";
 import UserInitialsBadge from "@/components/ui/UserInitialsBadge";
 
 interface PillarCard {
@@ -137,6 +137,10 @@ export default function DiscoveryPage() {
               </Link>
             );
           })}
+        </div>
+
+        <div className="pb-8">
+          <AICoachPromoCard />
         </div>
       </main>
 
