@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { use, useEffect, useRef, useState, type FormEvent } from "react";
+import { use, useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Clock, Compass, Target, X } from "lucide-react";
 import { PrimaryButton } from "@/components";
@@ -160,6 +160,7 @@ export default function ChatPage({ params }: { params: Promise<{ topic: string; 
   const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
   const hasInitialized = useRef(false);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
   // Tracks whether *this* conversation has used its "turn into X" action.
   // This is what decides, client-side, whether chat should still hold back
   // the day's last request for extraction — see the note on `remaining`
@@ -261,6 +262,22 @@ export default function ChatPage({ params }: { params: Promise<{ topic: string; 
     setInputValue("");
     await sendUserMessage(trimmed);
   };
+
+  const handleInputKeyDown = (e: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit();
+    }
+  };
+
+  // Grow the textarea with its content, like a chat app, capped so a long
+  // message scrolls instead of pushing the send button off-screen.
+  useEffect(() => {
+    const el = chatInputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [inputValue]);
 
   const handleOptionClick = (option: string) => {
     if (isSending || chatLimitReached) return;
@@ -744,12 +761,15 @@ export default function ChatPage({ params }: { params: Promise<{ topic: string; 
           </div>
         ) : chatLimitReached && (draft || discoveryDraft) ? null : (
           <form onSubmit={handleSend} className="mt-6 space-y-4">
-            <input
+            <textarea
+              ref={chatInputRef}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleInputKeyDown}
               placeholder="Type your message to Em..."
               disabled={isSending}
-              className="w-full rounded-full border border-gray-200 bg-white px-5 py-4 text-sm text-[var(--color-charcoal)] outline-none transition focus:border-[var(--color-magenta)] focus:ring-2 focus:ring-[var(--color-magenta)]/20 disabled:opacity-60"
+              rows={1}
+              className="thin-scrollbar w-full resize-none rounded-3xl border border-gray-200 bg-white py-4 pl-5 pr-6 text-sm leading-relaxed text-[var(--color-charcoal)] outline-none transition focus:border-[var(--color-magenta)] focus:ring-2 focus:ring-[var(--color-magenta)]/20 disabled:opacity-60"
             />
             <PrimaryButton
               type="submit"

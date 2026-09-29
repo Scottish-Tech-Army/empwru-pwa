@@ -106,6 +106,31 @@ h2 {
   padding-bottom: max(1.5rem, var(--safe-area-bottom));
 }
 
+/* Thin, inset scrollbar for content that grows inside a rounded box
+   (e.g. the auto-growing chat textarea) — the default OS scrollbar is
+   too wide and squares off against the rounded corner. */
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(3, 3, 3, 0.15) transparent;
+}
+
+.thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(3, 3, 3, 0.15);
+  border-radius: 999px;
+}
+
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(3, 3, 3, 0.25);
+}
+
 /* Focus states for accessibility */
 .focus-ring {
   outline: none;

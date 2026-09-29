@@ -120,7 +120,7 @@ export default function GoalDetailPage() {
 
   const handleConfirmCompletion = () => {
     if (!goal) return;
-    updateGoal(goal.id, { status: "completed" });
+    updateGoal(goal.id, { status: "completed", completedAt: new Date().toISOString() });
     refreshGoal();
     setShowCompletionConfirm(false);
     setShowCelebration(true);

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Clock, Compass, Flame, Lightbulb, Target, type LucideIcon } from "lucide-react";
+import { Clock, Compass, Flame, Lightbulb, Target, X, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { PrimaryButton } from "@/components";
 import { useRouter } from "next/navigation";
@@ -133,7 +133,15 @@ export default function AiCoachPage() {
       <div className="mx-auto flex min-h-screen w-full flex-col justify-center px-4 py-6 sm:px-8 lg:px-12">
         {showWelcomeModal && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/25 p-6 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-[32px] bg-white p-6 shadow-2xl ring-1 ring-black/10 sm:p-8">
+            <div className="relative w-full max-w-md rounded-[32px] bg-white p-6 shadow-2xl ring-1 ring-black/10 sm:p-8">
+              <button
+                type="button"
+                onClick={() => router.back()}
+                aria-label="Close"
+                className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-[var(--color-charcoal)]"
+              >
+                <X className="h-5 w-5" />
+              </button>
               <div className="space-y-5 text-center">
                 <p className="text-sm font-semibold uppercase tracking-[0.32em] text-[var(--color-magenta)]">
                   AI Coach

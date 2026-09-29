@@ -42,7 +42,7 @@ export function StepInput({
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleAdd()}
             placeholder={placeholder}
-            className="w-full p-4 rounded-2xl bg-gray-50 border-none focus:outline-none focus:ring-2 focus:ring-[var(--color-magenta)]/40 text-gray-900 placeholder:text-gray-300"
+            className="w-full p-4 rounded-2xl bg-gray-50 border-none focus:outline-none focus:ring-2 focus:ring-[var(--color-magenta)]/40 text-gray-900"
           />
         </div>
       </div>

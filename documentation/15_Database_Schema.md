@@ -58,6 +58,7 @@ create table if not exists public.goals (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   status text not null default 'active',
+  completed_at timestamptz,
   steps jsonb not null default '[]'::jsonb,
   actions jsonb not null default '[]'::jsonb
 );
@@ -84,6 +85,21 @@ create policy "Users can delete their own goals"
   on public.goals for delete
   using (auth.uid() = user_id);
 ```
+
+`completed_at` was added to scope the Progress page's "This week's win" card to
+goals actually completed in the current week (`src/app/progress/page.tsx`) —
+it's set once, in `handleConfirmCompletion` (`src/app/goals/[id]/page.tsx`),
+the moment a goal's status flips to `"completed"`, and never touched again.
+Existing databases created before this column existed need it added by hand:
+
+```sql
+alter table public.goals add column if not exists completed_at timestamptz;
+```
+
+Goals completed before this migration simply have `completed_at is null`,
+which `storage.ts`'s `completedGoalsEarlier` filter treats the same as "not
+this week" — they fall into Overall achievements rather than being wrongly
+shown as a fresh win.
 
 `category` is a free-text column but the app only ever writes one of:
 `Wellbeing`, `Career`, `Finance`, `Skills, Education & Learning`,
