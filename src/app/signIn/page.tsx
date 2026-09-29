@@ -99,14 +99,6 @@ export default function SignupPage() {
         </Link>
       </p>
 
-      {/* Terms of use */}
-      <p className="text-center text-xs text-text-muted max-w-xs mt-4">
-        By creating an account, you agree to our{" "}
-        <Link href="/terms" className="underline text-[var(--color-charcoal)]">
-          terms of use
-        </Link>
-        .
-      </p>
     </div>
   );
 }

@@ -627,17 +627,6 @@ export default function BaselinePage() {
             <span className="text-xs mt-1">Back</span>
           </button>
 
-          {/* Cancel */}
-          <button
-            onClick={handleCancel}
-            className="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-brand-primary transition-colors"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
-            </svg>
-            <span className="text-xs mt-1">Cancel</span>
-          </button>
-
           {/* Next/Continue */}
           <button
             onClick={handleNext}

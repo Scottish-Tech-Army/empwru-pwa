@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
-import { Home, Target, BarChart3, Lightbulb, RotateCcw, Sparkles } from "lucide-react";
+import { Home, Target, BarChart3, Lightbulb, Sparkles } from "lucide-react";
 
 interface NavItem {
   href: string;
@@ -36,11 +36,6 @@ const navItems: NavItem[] = [
     href: "/aicoach",
     label: "Coach",
     icon: <Sparkles className="w-6 h-6" />,
-  },
-  {
-    href: "/reset",
-    label: "Reset",
-    icon: <RotateCcw className="w-6 h-6" />,
   },
 ];
 
