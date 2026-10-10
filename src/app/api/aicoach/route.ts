@@ -27,6 +27,8 @@ const TOPIC_FOCUS: Record<string, string> = {
   stuck:
     "Focus this conversation on problem-solving — help the user work through what's blocking them from taking action.",
   idea: "Focus this conversation on sound-boarding the user's idea — help them think it through out loud.",
+  resources:
+    "Focus this conversation on signposting the user toward local support and services — things like Jobcentre Plus, Business Gateway, and local employability support. You don't have live local listings, so be upfront about that: point them to the right kind of service and suggest how to find the nearest branch (e.g. searching the service's own site), rather than inventing addresses or contact details.",
 };
 
 const CHAT_RESPONSE_GEMINI_SCHEMA = {
