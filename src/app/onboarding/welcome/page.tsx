@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { FullScreenLayout, WizardHeader } from "@/components";
 import { SECTIONS } from "../baseline/page";
 import { Sparkles } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import { getSessionDisplayName } from "@/lib/user-display";
+import { getCachedDisplayName } from "@/lib/storage";
 
 /**
  * Onboarding Screen 1: Welcome & Value Proposition
@@ -16,19 +15,7 @@ import { getSessionDisplayName } from "@/lib/user-display";
  */
 export default function WelcomePage() {
   const router = useRouter();
-  const [displayName, setDisplayName] = useState("");
-
-  useEffect(() => {
-    let active = true;
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (active) setDisplayName(getSessionDisplayName(session));
-    });
-
-    return () => {
-      active = false;
-    };
-  }, []);
+  const [displayName] = useState(() => getCachedDisplayName() ?? "");
 
   const handleOnboardingWelcomeNext = () => {
     // Will navigate to baseline quiz in Chunk 3

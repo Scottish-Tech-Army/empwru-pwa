@@ -19,11 +19,11 @@ export const STORAGE_KEYS = {
   CHECKIN_REMINDER_DISMISSED: `${STORAGE_PREFIX}checkin_reminder_dismissed`,
   CHECKIN_REMINDER_INTRO_SEEN: `${STORAGE_PREFIX}checkin_reminder_intro_seen`,
   BASELINE_REMINDER_DISMISSED: `${STORAGE_PREFIX}baseline_reminder_dismissed`,
-  BASELINE_REMINDER_INTRO_SEEN: `${STORAGE_PREFIX}baseline_reminder_intro_seen`,
   PREFERENCES: `${STORAGE_PREFIX}preferences`,
   DAILY_QUOTE: "empwru_daily_quote", // Standardized name
   DISCOVERY: `${STORAGE_PREFIX}discovery`,
   AICOACH_WELCOME_SEEN: `${STORAGE_PREFIX}aicoach_welcome_seen`,
+  DISPLAY_NAME: `${STORAGE_PREFIX}display_name`,
 } as const;
 
 // Onboarding state
@@ -78,8 +78,8 @@ const NON_CLAIMABLE_KEYS: string[] = [
   STORAGE_KEYS.CHECKIN_REMINDER_DISMISSED,
   STORAGE_KEYS.CHECKIN_REMINDER_INTRO_SEEN,
   STORAGE_KEYS.BASELINE_REMINDER_DISMISSED,
-  STORAGE_KEYS.BASELINE_REMINDER_INTRO_SEEN,
   STORAGE_KEYS.DAILY_QUOTE,
+  STORAGE_KEYS.DISPLAY_NAME,
 ];
 
 let currentUserId: string | null = isBrowser()
@@ -147,6 +147,21 @@ if (isBrowser()) {
  */
 export function primeStorageUserScope(userId: string | null): void {
   updateCurrentUserId(userId);
+}
+
+/**
+ * The greeting name cached by the top-level auth guard once per session, so
+ * pages that just need "what do we call this user" can read it synchronously
+ * instead of each re-deriving it from `supabase.auth.getSession()`.
+ */
+export function getCachedDisplayName(): string | null {
+  if (!isBrowser()) return null;
+  return localStorage.getItem(scopedKey(STORAGE_KEYS.DISPLAY_NAME));
+}
+
+export function cacheDisplayName(name: string): void {
+  if (!isBrowser()) return;
+  localStorage.setItem(scopedKey(STORAGE_KEYS.DISPLAY_NAME), name);
 }
 
 /**
@@ -373,24 +388,37 @@ function getBaselineReminderPeriod(daysSinceCompleted: number): number {
 }
 
 /**
+ * Whether the reminder's very first due date falls on today — used to skip
+ * it only on the exact calendar day it would first become due, so a
+ * brand-new account isn't hit with another popup on top of everything else
+ * from onboarding. Computed from the actual date rather than "is this the
+ * first time we've checked", since a user who doesn't open the app again
+ * until well past the due date would otherwise have that late check
+ * mistaken for the due day itself and get the reminder wrongly suppressed.
+ */
+function isFirstDueDateToday(completedAt: string): boolean {
+  const firstDueDate = new Date(
+    new Date(completedAt).getTime() + BASELINE_REMINDER_INTERVAL_DAYS * 24 * 60 * 60 * 1000
+  );
+  return firstDueDate.toDateString() === new Date().toDateString();
+}
+
+/**
  * Whether the "retake your baseline quiz" reminder popup should be shown:
  * due every 6 weeks since it was last completed, and not already dismissed
  * for this specific 6-week period (re-prompts once the next period starts).
- *
- * Like the weekly check-in reminder, the first calendar day this would ever
- * become due for a given user is skipped entirely, so a brand-new account
- * isn't hit with another popup on top of everything else from onboarding.
  */
 export function shouldShowBaselineReminder(): boolean {
   if (!isBrowser()) return false;
 
+  const { completedAt } = getBaselineResponse();
   const daysSinceCompleted = getDaysSinceBaselineCompleted();
-  if (daysSinceCompleted === null) return false;
+  if (daysSinceCompleted === null || !completedAt) return false;
 
   const currentPeriod = getBaselineReminderPeriod(daysSinceCompleted);
   if (currentPeriod < 1) return false;
 
-  if (isWithinFirstSeenDay(STORAGE_KEYS.BASELINE_REMINDER_INTRO_SEEN)) return false;
+  if (isFirstDueDateToday(completedAt)) return false;
 
   const dismissedPeriod = localStorage.getItem(scopedKey(STORAGE_KEYS.BASELINE_REMINDER_DISMISSED));
   return dismissedPeriod !== String(currentPeriod);

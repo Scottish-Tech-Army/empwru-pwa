@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { isOnboardingCompleted, primeStorageUserScope, saveOnboardingState } from "@/lib/storage";
+import { cacheDisplayName, isOnboardingCompleted, primeStorageUserScope, saveOnboardingState } from "@/lib/storage";
 import { hasCompletedBaselineOnServer } from "@/lib/baseline";
 import { hydrateFromSupabase } from "@/lib/hydrate";
+import { getSessionDisplayName } from "@/lib/user-display";
 
 // Reachable with no session — the pre-auth marketing/signup chain.
 const PUBLIC_ROUTES = ["/welcome", "/onboarding/carousel", "/signIn", "/signUp"];
@@ -64,6 +65,10 @@ export default function AppGuard({ children }: { children: React.ReactNode }) {
       if (!active) return;
 
       primeStorageUserScope(session?.user?.id ?? null);
+
+      if (session) {
+        cacheDisplayName(getSessionDisplayName(session));
+      }
 
       if (!session) {
         hydratedUserId.current = null;
