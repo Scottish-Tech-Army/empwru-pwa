@@ -21,7 +21,7 @@ import {
   BaselineResponse,
 } from "@/lib/storage";
 import { loadBaselineForCurrentUser } from "@/lib/baseline";
-import { EnergyTrendCard } from "@/components/ui/EnergyTrendCard";
+import { ConfidenceTrendCard } from "@/components/ui/ConfidenceTrendCard";
 import {
   Flame,
   Sparkles,
@@ -45,7 +45,7 @@ import UserInitialsBadge from "@/components/ui/UserInitialsBadge";
  *
  * Shows:
  * - Baseline vs current comparison
- * - Energy trend from check-ins
+ * - Confidence trend from check-ins
  * - Goals/steps completion stats
  * - Celebrate wins
  */
@@ -173,13 +173,13 @@ export default function ProgressPage() {
   const toggleLike = (type: "achievements" | "reflection", checkInId: string) =>
     setCheckIns(toggleCheckInLike(type, checkInId));
 
-  // Get recent energy levels from check-ins
+  // Get recent confidence levels from check-ins
   const recentCheckIns = [...checkIns]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 4);
-  
-  const latestEnergy = recentCheckIns.length > 0 ? recentCheckIns[0].energyLevel : null;
-  const previousEnergy = recentCheckIns.length > 1 ? recentCheckIns[1].energyLevel : null;
+
+  const latestConfidence = recentCheckIns.length > 0 ? recentCheckIns[0].confidenceLevel : null;
+  const previousConfidence = recentCheckIns.length > 1 ? recentCheckIns[1].confidenceLevel : null;
 
   const hasBaseline = baseline.completedAt;
   const hasData = checkIns.length > 0 || goals.length > 0;
@@ -628,7 +628,7 @@ export default function ProgressPage() {
               )}
             </section>
 
-            <EnergyTrendCard checkIns={checkIns} />
+            <ConfidenceTrendCard checkIns={checkIns} />
 
             {/* Section 4: Review where you started */}
             <section className="mb-6">
