@@ -18,16 +18,16 @@ import { CelebrationScreen } from "@/components/ui/CelebrationScreen";
 
 /**
  * Weekly Check-in Wizard
- * 
+ *
  * Steps:
- * 1. Energy - How are you feeling overall?
+ * 1. Confidence - How confident are you feeling?
  * 2. Progress - Which steps did you complete?
  * 3. Reflection - What went well?
  * 4. Done - Celebration!
  */
 
 interface CheckInDraft {
-  energyLevel: number;
+  confidenceLevel: number;
   achievements: string;
   reflection: string;
 }
@@ -36,7 +36,7 @@ export default function CheckInPage() {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [draft, setDraft] = useState<CheckInDraft>({
-    energyLevel: 3,
+    confidenceLevel: 3,
     achievements: "",
     reflection: "",
   });
@@ -46,7 +46,7 @@ export default function CheckInPage() {
   const handleFinish = () => {
     saveCheckIn({
       date: new Date().toISOString().split("T")[0],
-      energyLevel: draft.energyLevel,
+      confidenceLevel: draft.confidenceLevel,
       achievements: draft.achievements,
       reflection: draft.reflection,
     });
@@ -93,7 +93,7 @@ export default function CheckInPage() {
           </div>
 
           <div className="space-y-10">
-            {/* Step 1: Energy */}
+            {/* Step 1: Confidence */}
             {step === 1 && (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-xl mx-auto">
                 {/* Icon Header - Outside Card */}
@@ -101,7 +101,7 @@ export default function CheckInPage() {
                   <div className="w-16 h-16 rounded-2xl bg-brand-primary/10 flex items-center justify-center mx-auto mb-4">
                     <Heart className="w-8 h-8 text-brand-primary" strokeWidth={1.5} />
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-900">How&apos;s your energy?</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">How&apos;s your confidence?</h2>
                   <p className="text-gray-500 mt-2 text-sm">Check in with yourself before checking in with your goals.</p>
                 </div>
 
@@ -111,8 +111,8 @@ export default function CheckInPage() {
                     {[1, 2, 3, 4, 5].map((level) => (
                       <button
                         key={level}
-                        onClick={() => setDraft({ ...draft, energyLevel: level })}
-                        className={`w-14 h-14 rounded-2xl font-bold text-xl transition-all ${draft.energyLevel === level
+                        onClick={() => setDraft({ ...draft, confidenceLevel: level })}
+                        className={`w-14 h-14 rounded-2xl font-bold text-xl transition-all ${draft.confidenceLevel === level
                           ? "bg-brand-primary text-white scale-110"
                           : "bg-gray-50 text-gray-400 hover:bg-gray-100"
                           }`}
@@ -123,8 +123,8 @@ export default function CheckInPage() {
                   </div>
 
                   <div className="flex justify-between text-[11px] font-bold text-gray-400 uppercase tracking-wider mt-3">
-                    <span>Very Low</span>
-                    <span>Feeling Great</span>
+                    <span>Not confident</span>
+                    <span>Very confident</span>
                   </div>
                 </div>
               </div>

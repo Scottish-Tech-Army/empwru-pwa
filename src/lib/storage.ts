@@ -944,7 +944,7 @@ export function getGoalProgress(goal: Goal): number {
 export interface CheckIn {
   id: string;
   date: string; // ISO date (YYYY-MM-DD)
-  energyLevel: number; // 1-5 scale
+  confidenceLevel: number; // 1-5 scale
   achievements?: string; // User's self-reported achievements
   reflection?: string; // Optional weekly reflection
   stepsCompleted: string[]; // IDs of steps marked complete this session (legacy)
@@ -958,7 +958,10 @@ function mapCheckInFromSupabase(row: Record<string, unknown>): CheckIn {
   return {
     id: String(row.id ?? ""),
     date: String(row.date ?? ""),
-    energyLevel: Number(row.energy_level ?? 0),
+    // Column is still named `energy_level` — it predates the check-in
+    // question changing from energy to confidence, same as the
+    // milestones→steps rename elsewhere in this file.
+    confidenceLevel: Number(row.energy_level ?? 0),
     achievements: row.achievements ? String(row.achievements) : undefined,
     reflection: row.reflection ? String(row.reflection) : undefined,
     stepsCompleted: Array.isArray(row.steps_completed) ? (row.steps_completed as string[]) : [],
@@ -973,7 +976,7 @@ function mapCheckInForSupabase(checkIn: CheckIn, userId: string) {
     id: checkIn.id,
     user_id: userId,
     date: checkIn.date,
-    energy_level: checkIn.energyLevel,
+    energy_level: checkIn.confidenceLevel,
     achievements: checkIn.achievements ?? null,
     reflection: checkIn.reflection ?? null,
     steps_completed: checkIn.stepsCompleted ?? [],
@@ -1244,7 +1247,7 @@ export interface WeeklyMomentumData {
   weekStart: Date;
   weekLabel: string;
   hasCheckIn: boolean;
-  avgEnergy: number | null;
+  avgConfidence: number | null;
   stepsCompleted: number;
   score: number;
 }
@@ -1273,8 +1276,8 @@ export function getWeeklyMomentumData(weeksCount: number = 8): WeeklyMomentumDat
     });
 
     const hasCheckIn = weekCheckIns.length > 0;
-    const avgEnergy = hasCheckIn
-      ? weekCheckIns.reduce((sum, c) => sum + c.energyLevel, 0) / weekCheckIns.length
+    const avgConfidence = hasCheckIn
+      ? weekCheckIns.reduce((sum, c) => sum + c.confidenceLevel, 0) / weekCheckIns.length
       : null;
 
     const stepsCompleted = weekCheckIns.reduce(
@@ -1285,7 +1288,7 @@ export function getWeeklyMomentumData(weeksCount: number = 8): WeeklyMomentumDat
     let score = 0;
     if (hasCheckIn) {
       score += 40;
-      score += avgEnergy ? ((avgEnergy - 1) / 4) * 30 : 0;
+      score += avgConfidence ? ((avgConfidence - 1) / 4) * 30 : 0;
       score += totalSteps > 0
         ? Math.min(30, (stepsCompleted / totalSteps) * 100 * 0.3)
         : 0;
@@ -1300,7 +1303,7 @@ export function getWeeklyMomentumData(weeksCount: number = 8): WeeklyMomentumDat
       weekStart,
       weekLabel,
       hasCheckIn,
-      avgEnergy,
+      avgConfidence,
       stepsCompleted,
       score: Math.round(score),
     });

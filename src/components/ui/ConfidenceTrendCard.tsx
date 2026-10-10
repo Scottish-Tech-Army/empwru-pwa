@@ -1,14 +1,14 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Zap } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import type { CheckIn } from "@/lib/storage";
 
 const VIEW_W = 600;
 const VIEW_H = 200;
 const PAD_LEFT = 32;
 const PAD_RIGHT = 16;
-const PLOT_TOP = 16;
+const PLOT_TOP = 28;
 const PLOT_BOTTOM = 150;
 const SCALE_MIN = 1;
 const SCALE_MAX = 5;
@@ -28,7 +28,7 @@ function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export function EnergyTrendCard({ checkIns }: { checkIns: CheckIn[] }) {
+export function ConfidenceTrendCard({ checkIns }: { checkIns: CheckIn[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
@@ -44,11 +44,11 @@ export function EnergyTrendCard({ checkIns }: { checkIns: CheckIn[] }) {
       <section className="mb-6">
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
           <div className="flex items-center gap-2 mb-1">
-            <Zap className="w-5 h-5 text-brand-primary" />
-            <p className="text-[var(--color-charcoal)] font-semibold text-lg">Energy over time</p>
+            <ShieldCheck className="w-5 h-5 text-brand-primary" />
+            <p className="text-[var(--color-charcoal)] font-semibold text-lg">Confidence over time</p>
           </div>
           <p className="text-text-muted text-sm">
-            Check in for a couple more weeks to start seeing your energy trend here.
+            Check in for a couple more weeks to start seeing your confidence trend here.
           </p>
         </div>
       </section>
@@ -56,7 +56,7 @@ export function EnergyTrendCard({ checkIns }: { checkIns: CheckIn[] }) {
   }
 
   const linePath = points
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${scaleX(i, points.length)} ${scaleY(p.energyLevel)}`)
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${scaleX(i, points.length)} ${scaleY(p.confidenceLevel)}`)
     .join(" ");
 
   const areaPath = `${linePath} L ${scaleX(points.length - 1, points.length)} ${scaleY(SCALE_MIN)} L ${scaleX(0, points.length)} ${scaleY(SCALE_MIN)} Z`;
@@ -81,7 +81,7 @@ export function EnergyTrendCard({ checkIns }: { checkIns: CheckIn[] }) {
     setHoverIndex(nearest);
     setTooltipPos({
       x: (scaleX(nearest, points.length) / VIEW_W) * rect.width,
-      y: (scaleY(points[nearest].energyLevel) / VIEW_H) * rect.height,
+      y: (scaleY(points[nearest].confidenceLevel) / VIEW_H) * rect.height,
     });
   };
 
@@ -93,8 +93,8 @@ export function EnergyTrendCard({ checkIns }: { checkIns: CheckIn[] }) {
     <section className="mb-6">
       <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6">
         <div className="flex items-center gap-2 mb-1">
-          <Zap className="w-5 h-5 text-brand-primary" />
-          <p className="text-[var(--color-charcoal)] font-semibold text-lg">Energy over time</p>
+          <ShieldCheck className="w-5 h-5 text-brand-primary" />
+          <p className="text-[var(--color-charcoal)] font-semibold text-lg">Confidence over time</p>
         </div>
         <p className="text-text-muted text-sm mb-4">Your last {points.length} weekly check-ins</p>
 
@@ -104,7 +104,7 @@ export function EnergyTrendCard({ checkIns }: { checkIns: CheckIn[] }) {
             className="w-full h-40"
             preserveAspectRatio="none"
             role="img"
-            aria-label={`Energy level across your last ${points.length} check-ins, from ${first.energyLevel} to ${last.energyLevel} out of 5`}
+            aria-label={`Confidence level across your last ${points.length} check-ins, from ${first.confidenceLevel} to ${last.confidenceLevel} out of 5`}
             onPointerMove={handlePointerMove}
             onPointerLeave={() => {
               setHoverIndex(null);
@@ -144,7 +144,7 @@ export function EnergyTrendCard({ checkIns }: { checkIns: CheckIn[] }) {
               <circle
                 key={p.id}
                 cx={scaleX(i, points.length)}
-                cy={scaleY(p.energyLevel)}
+                cy={scaleY(p.confidenceLevel)}
                 r={hoverIndex === i ? 6 : 4}
                 fill="var(--color-deep-violet)"
                 stroke="white"
@@ -153,18 +153,18 @@ export function EnergyTrendCard({ checkIns }: { checkIns: CheckIn[] }) {
             ))}
 
             {/* Endpoint labels */}
-            <text x={scaleX(0, points.length)} y={scaleY(first.energyLevel) - 12} textAnchor="start" fontSize={12} fontWeight={600} fill="var(--color-charcoal)">
-              {first.energyLevel}
+            <text x={scaleX(0, points.length)} y={scaleY(first.confidenceLevel) - 12} textAnchor="start" fontSize={12} fontWeight={600} fill="var(--color-charcoal)">
+              {first.confidenceLevel}
             </text>
             <text
               x={scaleX(points.length - 1, points.length)}
-              y={scaleY(last.energyLevel) - 12}
+              y={scaleY(last.confidenceLevel) - 12}
               textAnchor="end"
               fontSize={12}
               fontWeight={600}
               fill="var(--color-charcoal)"
             >
-              {last.energyLevel}
+              {last.confidenceLevel}
             </text>
 
             {/* x-axis endpoint dates */}
@@ -181,7 +181,7 @@ export function EnergyTrendCard({ checkIns }: { checkIns: CheckIn[] }) {
               className="absolute pointer-events-none bg-[var(--color-charcoal)] text-white text-xs rounded-lg px-2.5 py-1.5 shadow-lg whitespace-nowrap -translate-x-1/2 -translate-y-full"
               style={{ left: tooltipPos.x, top: tooltipPos.y - 8 }}
             >
-              <div className="font-semibold">{hovered.energyLevel}/5 energy</div>
+              <div className="font-semibold">{hovered.confidenceLevel}/5 confidence</div>
               <div className="text-white/70">{formatShortDate(hovered.createdAt)}</div>
             </div>
           )}
