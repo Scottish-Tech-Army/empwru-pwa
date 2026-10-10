@@ -20,7 +20,8 @@ import {
 } from "@/lib/storage";
 import { loadBaselineForCurrentUser } from "@/lib/baseline";
 import { supabase } from "@/lib/supabase";
-import { capitalizeWords, getDisplayNameFromEmail } from "@/lib/user-display";
+import { getDisplayNameFromEmail } from "@/lib/user-display";
+import { getCachedDisplayName } from "@/lib/storage";
 
 import BottomNav from "@/components/ui/BottomNav";
 import BottomSheet from "@/components/ui/BottomSheet";
@@ -57,7 +58,7 @@ export default function DashboardPage() {
   const [showBaselineReminder, setShowBaselineReminder] = useState(false);
   const [momentum, setMomentum] = useState(0);
   const [isDiscoveryEmpty, setIsDiscoveryEmpty] = useState(false);
-  const [displayName, setDisplayName] = useState("User");
+  const [displayName] = useState(() => getCachedDisplayName() ?? "User");
 
   const refreshDashboardData = async () => {
     try {
@@ -110,14 +111,11 @@ export default function DashboardPage() {
 
       setIsAuthenticated(true);
 
-      const derivedName = getDisplayNameFromEmail(session.user.email);
       const metadataName = session.user.user_metadata?.display_name;
-      const nextDisplayName = metadataName ? capitalizeWords(metadataName) : derivedName;
-
-      setDisplayName(nextDisplayName);
-
       if (!metadataName) {
-        await supabase.auth.updateUser({ data: { display_name: derivedName } });
+        await supabase.auth.updateUser({
+          data: { display_name: getDisplayNameFromEmail(session.user.email) },
+        });
       }
 
       await refreshDashboardData();

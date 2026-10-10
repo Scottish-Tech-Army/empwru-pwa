@@ -28,12 +28,13 @@ export function getDisplayNameFromEmail(email: string | null | undefined): strin
 }
 
 /**
- * The name to greet a signed-in user by: their stored display name if set,
- * otherwise one derived from their email.
+ * The name to greet a signed-in user by: the first name from their stored
+ * display name if set, otherwise one derived from their email.
  */
 export function getSessionDisplayName(session: Session | null): string {
   if (!session) return "User";
 
   const metadataName = session.user.user_metadata?.display_name;
-  return metadataName ? capitalizeWords(metadataName) : getDisplayNameFromEmail(session.user.email);
+  const firstName = metadataName?.trim().split(/\s+/)[0];
+  return firstName ? capitalizeWords(firstName) : getDisplayNameFromEmail(session.user.email);
 }

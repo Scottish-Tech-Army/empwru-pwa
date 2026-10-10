@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { resetAllData } from "@/lib/storage";
+import { cacheDisplayName, resetAllData } from "@/lib/storage";
 import { capitalizeWords } from "@/lib/user-display";
 import {
   ArrowLeft,
@@ -11,6 +11,7 @@ import {
   ListChecks,
   LogOut,
   MapPin,
+  Pencil,
   Settings,
   Trash2,
   TrendingUp,
@@ -47,6 +48,11 @@ export default function ProfilePage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [savingName, setSavingName] = useState(false);
+  const [nameError, setNameError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -70,6 +76,8 @@ export default function ProfilePage() {
 
       setDisplayName(name);
       setInitials(nextInitials);
+      setFirstName(session.user.user_metadata?.first_name ?? "");
+      setLastName(session.user.user_metadata?.last_name ?? "");
       setLoading(false);
     }
 
@@ -79,6 +87,55 @@ export default function ProfilePage() {
       active = false;
     };
   }, [router]);
+
+  const handleStartEditName = () => {
+    setNameError("");
+    setIsEditingName(true);
+  };
+
+  const handleCancelEditName = () => {
+    setNameError("");
+    setIsEditingName(false);
+  };
+
+  const handleSaveName = async () => {
+    const trimmedFirst = firstName.trim();
+    const trimmedLast = lastName.trim();
+
+    if (!trimmedFirst || !trimmedLast) {
+      setNameError("Please enter both a first and last name.");
+      return;
+    }
+
+    setSavingName(true);
+    setNameError("");
+
+    const nextDisplayName = `${trimmedFirst} ${trimmedLast}`.trim();
+
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        first_name: trimmedFirst,
+        last_name: trimmedLast,
+        display_name: nextDisplayName,
+      },
+    });
+
+    if (error) {
+      console.error("Failed to update name", error);
+      setNameError("Couldn't save your name. Please try again.");
+      setSavingName(false);
+      return;
+    }
+
+    const name = capitalizeWords(nextDisplayName);
+    setDisplayName(name);
+    setInitials(getInitials(trimmedFirst, trimmedLast, name));
+    setFirstName(trimmedFirst);
+    setLastName(trimmedLast);
+    cacheDisplayName(capitalizeWords(trimmedFirst));
+    setSavingName(false);
+    setIsEditingName(false);
+  };
 
   const handleLogout = async () => {
     if (loggingOut) return;
@@ -140,9 +197,65 @@ export default function ProfilePage() {
             <div className="grid h-24 w-24 place-items-center rounded-full bg-brand-primary text-3xl font-semibold text-white">
               {initials}
             </div>
-            <div>
-              <h1 className="text-2xl font-semibold text-[var(--color-charcoal)]">{displayName}</h1>
-            </div>
+            {isEditingName ? (
+              <div className="w-full max-w-xs">
+                <div className="flex gap-3">
+                  <label className="block flex-1 text-left text-xs text-text-muted">
+                    First name
+                    <input
+                      type="text"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
+                    />
+                  </label>
+                  <label className="block flex-1 text-left text-xs text-text-muted">
+                    Last name
+                    <input
+                      type="text"
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-brand-primary focus:border-brand-primary"
+                    />
+                  </label>
+                </div>
+
+                {nameError && (
+                  <p className="mt-2 text-sm text-red-600">{nameError}</p>
+                )}
+
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveName}
+                    disabled={savingName}
+                    className="flex-1 rounded-2xl bg-brand-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {savingName ? "Saving..." : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelEditName}
+                    disabled={savingName}
+                    className="flex-1 rounded-2xl border border-gray-200 px-4 py-2 text-sm font-semibold text-[var(--color-charcoal)] transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-semibold text-[var(--color-charcoal)]">{displayName}</h1>
+                <button
+                  type="button"
+                  onClick={handleStartEditName}
+                  aria-label="Edit name"
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full text-text-muted hover:bg-gray-100 transition"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="mt-6 grid gap-3">

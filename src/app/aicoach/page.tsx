@@ -5,8 +5,7 @@ import { Clock, Compass, Flame, Lightbulb, Target, X, type LucideIcon } from "lu
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { PrimaryButton } from "@/components";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
-import { hasSeenAiCoachWelcome, markAiCoachWelcomeSeen } from "@/lib/storage";
+import { getCachedDisplayName, hasSeenAiCoachWelcome, markAiCoachWelcomeSeen } from "@/lib/storage";
 import BottomNav from "@/components/ui/BottomNav";
 
 type PromptTopic = {
@@ -47,30 +46,14 @@ const INITIAL_MESSAGES: ChatMessage[] = [
   },
 ];
 
-function getDisplayNameFromEmail(email: string | null | undefined) {
-  const localPart = email?.split("@")[0] ?? "there";
-  const cleaned = localPart.replace(/[^a-zA-Z0-9]/g, "");
-  const derived = cleaned.slice(0, 6) || "there";
-
-  return derived.charAt(0).toUpperCase() + derived.slice(1);
-}
-
 export default function AiCoachPage() {
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [inputValue, setInputValue] = useState("");
   const [showWelcomeModal, setShowWelcomeModal] = useState(true);
-  const [displayName, setDisplayName] = useState("there");
+  const [displayName] = useState(() => getCachedDisplayName() ?? "there");
   const [isLoadingPrompts, setIsLoadingPrompts] = useState(true);
   const [chatLimitReached, setChatLimitReached] = useState(false);
   const router = useRouter();
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) return;
-      const metadataName = session.user.user_metadata?.display_name;
-      setDisplayName(metadataName || getDisplayNameFromEmail(session.user.email));
-    });
-  }, []);
 
   useEffect(() => {
     if (hasSeenAiCoachWelcome()) {
