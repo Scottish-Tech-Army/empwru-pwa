@@ -19,6 +19,14 @@ All tables use Supabase's built-in `auth.users` for identity — every table
 has a `user_id uuid references auth.users(id)` column, and Row Level Security
 is enabled everywhere so a user can only ever read/write their own rows.
 
+**Update:** `goals`, `discovery_data`, `baseline_responses`, and `checkins`
+now also carry additive policies granting `admin`/`facilitator` roles
+broader access (full CRUD for `admin`, read-only for `facilitator`) — "a
+user can only ever read/write their own rows" is the default-tier behaviour,
+not the whole story anymore. The role table backing this (`user_roles`) and
+those policies are documented separately in
+`16_User_Roles_and_Facilitator_Access.md` rather than repeated here.
+
 ---
 
 ## `goals`
