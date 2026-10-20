@@ -440,7 +440,9 @@ export default function ChatPage({ params }: { params: Promise<{ topic: string; 
                   !draft &&
                   !discoveryDraft &&
                   hasConversation &&
-                  !chatLimitReached &&
+                  // Not chatLimitReached: chat stops with one request still
+                  // held back *for* this button, so it must stay visible then.
+                  !dailyLimitReached &&
                   !message.isError &&
                   canTurnIntoAction;
 
@@ -474,7 +476,7 @@ export default function ChatPage({ params }: { params: Promise<{ topic: string; 
                               />
                           </div>
                           )}
-                          <p className="text-sm leading-6">{message.text}</p>
+                          <p className="whitespace-pre-line text-sm leading-6">{message.text}</p>
                         </div>
                       </div>
                     </div>

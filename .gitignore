@@ -46,3 +46,6 @@ CLAUDE.md
 # local design-mockup previews (Claude-generated, not part of the app)
 /.local-previews
 
+
+# AI Coach eval run outputs
+evals/aicoach-guardrails/results/

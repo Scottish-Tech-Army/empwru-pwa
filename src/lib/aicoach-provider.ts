@@ -34,6 +34,21 @@ export interface ChatTurn {
 }
 
 /**
+ * Thrown when the model itself declines to answer on safety grounds, so
+ * callers can show a friendly out-of-scope reply instead of a generic error.
+ */
+export class AiCoachRefusalError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AiCoachRefusalError";
+  }
+}
+
+// Gemini finish reasons that mean the reply was blocked for safety/policy
+// reasons rather than failing for some technical reason.
+const GEMINI_BLOCKED_FINISH_REASONS = new Set(["SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII"]);
+
+/**
  * Sends a system instruction + turn history to whichever model backs the AI
  * Coach and returns the raw JSON text it produced. Gemini and Claude use
  * different schema dialects for structured output (Gemini's OpenAPI-style
@@ -66,6 +81,13 @@ export async function generateAiCoachJson({
         parts: [{ text: turn.text }],
       })),
     });
+    const finishReason = response.candidates?.[0]?.finishReason;
+    if (
+      response.promptFeedback?.blockReason ||
+      (finishReason && GEMINI_BLOCKED_FINISH_REASONS.has(String(finishReason)))
+    ) {
+      throw new AiCoachRefusalError("Gemini blocked the response on safety grounds");
+    }
     // ?? only catches null/undefined, not an empty string — Gemini can
     // return .text as "" when there's genuinely no text content, which
     // would otherwise reach JSON.parse("") and throw a confusing
@@ -85,7 +107,7 @@ export async function generateAiCoachJson({
   });
 
   if (response.stop_reason === "refusal") {
-    throw new Error("Claude declined to respond");
+    throw new AiCoachRefusalError("Claude declined to respond");
   }
 
   if (response.stop_reason === "max_tokens") {
