@@ -7,9 +7,17 @@ import { cacheDisplayName, isOnboardingCompleted, primeStorageUserScope, saveOnb
 import { hasCompletedBaselineOnServer } from "@/lib/baseline";
 import { hydrateFromSupabase } from "@/lib/hydrate";
 import { getSessionDisplayName } from "@/lib/user-display";
+import { isPendingInvite } from "@/lib/invite-status";
+import { isOpenSignup } from "@/lib/signup-mode";
 
 // Reachable with no session — the pre-auth marketing/signup chain.
 const PUBLIC_ROUTES = ["/welcome", "/onboarding/carousel", "/signIn", "/signUp"];
+
+// Where a signed-out visitor starts. With open sign-up that's the welcome
+// screen, whose "Get started" leads to the sign-up form. While sign-up is
+// invite-only that chain dead-ends at "Join by invitation", so everyone
+// starts at sign-in instead (invitees arrive through their invite link).
+const SIGNED_OUT_LANDING = isOpenSignup ? "/welcome" : "/signIn";
 
 // Reachable once signed in but before onboarding is complete — the
 // post-auth onboarding chain itself. No legitimate reason to revisit these
@@ -21,6 +29,10 @@ const ONBOARDING_ROUTES = ["/onboarding/welcome", "/onboarding/reminder"];
 // started" / retake-baseline screen, linked from the progress page and the
 // dashboard's 6-week reminder) — never gated on onboarding-completed state.
 const ALWAYS_AUTH_ROUTES = ["/onboarding/baseline"];
+
+// Where an invited participant finishes setting up their account. Anyone
+// signed in with an unfinished invite is held here (see isPendingInvite).
+const CREATE_ACCOUNT_ROUTES = ["/create-account"];
 
 // Manages its own data lifecycle (clears localStorage, signs out) — must
 // never be redirected away from before it's had a chance to run.
@@ -73,10 +85,29 @@ export default function AppGuard({ children }: { children: React.ReactNode }) {
       if (!session) {
         hydratedUserId.current = null;
         if (!matches(pathname, PUBLIC_ROUTES)) {
-          router.replace("/welcome");
+          router.replace(SIGNED_OUT_LANDING);
           return;
         }
         setReadyFor(pathname);
+        return;
+      }
+
+      // Following an invite link signs the participant in before they've
+      // chosen a password. Until they finish /create-account they can't go
+      // anywhere else — otherwise leaving that page (or reopening the used
+      // link) would drop them into onboarding on an account they could
+      // never sign back in to.
+      if (isPendingInvite(session.user)) {
+        if (!matches(pathname, CREATE_ACCOUNT_ROUTES)) {
+          router.replace("/create-account");
+          return;
+        }
+        setReadyFor(pathname);
+        return;
+      }
+
+      if (matches(pathname, CREATE_ACCOUNT_ROUTES)) {
+        router.replace("/");
         return;
       }
 

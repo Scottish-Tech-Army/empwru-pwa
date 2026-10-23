@@ -3,9 +3,24 @@
 import { PasswordInput, PrimaryButton } from "@/components";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase"
+import { isOpenSignup } from "@/lib/signup-mode";
+
+// /auth/confirm sends people here with ?link=expired when an invite link is
+// used, expired or invalid.
+function ExpiredLinkNotice() {
+  const searchParams = useSearchParams();
+  if (searchParams.get("link") !== "expired") return null;
+
+  return (
+    <p className="w-full max-w-sm rounded-2xl bg-brand-primary/10 px-4 py-3 text-sm text-text-muted">
+      That invite link has expired or has already been used. If you&apos;ve already set your password, sign in
+      below. Otherwise, ask your facilitator to send a new invite.
+    </p>
+  );
+}
 
 export default function SignupPage() {
   const router = useRouter();
@@ -45,6 +60,10 @@ export default function SignupPage() {
       <h1 className="text-center text-[var(--color-charcoal)] font-bold text-3xl md:text-4xl mb-4 leading-tight px-4 max-w-lg mx-auto">
         Sign in to your account
       </h1>
+
+      <Suspense fallback={null}>
+        <ExpiredLinkNotice />
+      </Suspense>
 
       {/* Email/Password form */}
       <form
@@ -88,14 +107,14 @@ export default function SignupPage() {
         <PrimaryButton onClick={handleSignInAccount}>Sign in</PrimaryButton>
       </form>
 
-      {/* Sign up link */}
+      {/* Sign-up form, or how to join while sign-up is invite-only */}
       <p className="text-center text-sm text-text-muted mt-8">
-        Don't have an account?{" "}
+        Don&apos;t have an account?{" "}
         <Link
           href="/signUp"
           className="text-[var(--color-charcoal)] font-semibold underline"
         >
-          Sign up
+          {isOpenSignup ? "Sign up" : "How to join"}
         </Link>
       </p>
 
