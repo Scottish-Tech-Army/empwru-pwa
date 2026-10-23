@@ -10,9 +10,10 @@ import {
   Compass,
   ListChecks,
   LogOut,
-  MapPin,
+  Mail,
   Pencil,
   Settings,
+  ShieldCheck,
   Trash2,
   TrendingUp,
 } from "lucide-react";
@@ -42,6 +43,8 @@ function getInitials(
 export default function ProfilePage() {
   const router = useRouter();
   const [displayName, setDisplayName] = useState("User");
+  const [email, setEmail] = useState("");
+  const [canViewFacilitator, setCanViewFacilitator] = useState(false);
   const [initials, setInitials] = useState("U");
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -75,10 +78,23 @@ export default function ProfilePage() {
       );
 
       setDisplayName(name);
+      setEmail(session.user.email ?? "");
       setInitials(nextInitials);
       setFirstName(session.user.user_metadata?.first_name ?? "");
       setLastName(session.user.user_metadata?.last_name ?? "");
       setLoading(false);
+
+      const { data: roleRows } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", session.user.id);
+
+      if (!active) return;
+
+      const roles = (roleRows ?? []).map((row) => row.role);
+      setCanViewFacilitator(
+        roles.includes("admin") || roles.includes("facilitator"),
+      );
     }
 
     void loadProfile();
@@ -256,6 +272,12 @@ export default function ProfilePage() {
                 </button>
               </div>
             )}
+            {email && (
+              <div className="flex items-center gap-2 text-sm text-text-muted">
+                <Mail className="w-4 h-4" />
+                {email}
+              </div>
+            )}
           </div>
 
           <div className="mt-6 grid gap-3">
@@ -289,15 +311,18 @@ export default function ProfilePage() {
               </span>
               My goals
             </button>
-            <button
-              type="button"
-              className="group flex items-center gap-3 rounded-3xl border border-gray-200 bg-white px-4 py-4 text-left text-base font-medium text-[var(--color-charcoal)] shadow-sm hover:border-gray-300 transition"
-            >
-              <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-primary text-white transition group-hover:bg-brand-primary/90">
-                <MapPin className="w-5 h-5" />
-              </span>
-              Location
-            </button>
+            {canViewFacilitator && (
+              <button
+                type="button"
+                onClick={() => router.push("/facilitator")}
+                className="group flex items-center gap-3 rounded-3xl border border-gray-200 bg-white px-4 py-4 text-left text-base font-medium text-[var(--color-charcoal)] shadow-sm hover:border-gray-300 transition"
+              >
+                <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-primary text-white transition group-hover:bg-brand-primary/90">
+                  <ShieldCheck className="w-5 h-5" />
+                </span>
+                Facilitator view
+              </button>
+            )}
             <button
               type="button"
               className="group flex items-center gap-3 rounded-3xl border border-gray-200 bg-white px-4 py-4 text-left text-base font-medium text-[var(--color-charcoal)] shadow-sm hover:border-gray-300 transition"
