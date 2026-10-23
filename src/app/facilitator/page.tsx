@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   HeartHandshake,
   Heart,
+  UserPlus,
 } from "lucide-react";
 import { getCurrentUser, hasAnyRole } from "@/lib/roles";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
@@ -216,6 +217,13 @@ export default async function FacilitatorPage() {
               Alumni roster
               <span className="ml-1.5 text-text-subtle">({overview.roster.length})</span>
             </h2>
+            <Link
+              href="/facilitator/invite"
+              className="flex items-center gap-1.5 rounded-full bg-brand-primary px-3.5 py-2 text-xs text-white transition hover:brightness-110 active:scale-[0.98]"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              Invite participant
+            </Link>
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-deep-violet/10 bg-white shadow-sm">

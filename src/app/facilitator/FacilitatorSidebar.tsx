@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Menu, X, LayoutDashboard, Users, CalendarCheck, FolderKanban } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Menu, X, LayoutDashboard, UserPlus, Users, CalendarCheck, FolderKanban } from "lucide-react";
 
 interface FacilitatorSidebarProps {
   email: string;
@@ -14,6 +15,7 @@ const NAV_ITEMS: {
   icon: typeof LayoutDashboard;
 }[] = [
   { label: "Overview", href: "/facilitator", icon: LayoutDashboard },
+  { label: "Invite participant", href: "/facilitator/invite", icon: UserPlus },
   { label: "Alumni roster", icon: Users },
   { label: "Check-ins", icon: CalendarCheck },
   { label: "Cohorts", icon: FolderKanban },
@@ -22,11 +24,13 @@ const NAV_ITEMS: {
 /**
  * The mockup's always-visible desktop sidebar doesn't fit a single real
  * page yet (Alumni roster/Check-ins/Cohorts aren't separate routes) — this
- * renders it as an on-demand drawer instead, with only "Overview" wired to
- * a real link. The rest are visibly inert rather than pretending to work.
+ * renders it as an on-demand drawer instead, with only "Overview" and
+ * "Invite participant" wired to real links. The rest are visibly inert
+ * rather than pretending to work.
  */
 export default function FacilitatorSidebar({ email }: FacilitatorSidebarProps) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
 
   return (
     <>
@@ -60,7 +64,9 @@ export default function FacilitatorSidebar({ email }: FacilitatorSidebarProps) {
                   key={item.label}
                   href={item.href}
                   onClick={() => setOpen(false)}
-                  className="flex items-center gap-2.5 rounded-xl bg-white/15 px-3 py-2.5 text-sm text-white"
+                  className={`flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-white ${
+                    pathname === item.href ? "bg-white/15" : "hover:bg-white/10"
+                  }`}
                 >
                   <item.icon className="h-4 w-4" />
                   {item.label}

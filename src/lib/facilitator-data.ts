@@ -1,6 +1,7 @@
 import type { createSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAdminClient } from "@/lib/supabase-admin";
 import { capitalizeWords, getDisplayNameFromEmail } from "@/lib/user-display";
+import { isPendingInvite } from "@/lib/invite-status";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
@@ -97,7 +98,9 @@ export async function getFacilitatorOverview(
   if (usersError) {
     throw new Error(`Failed to list users: ${usersError.message}`);
   }
-  const users = usersPage.users;
+  // Invitees who haven't accepted yet aren't alumni — they're listed on the
+  // invite page instead, not here as "gone quiet".
+  const users = usersPage.users.filter((user) => !isPendingInvite(user));
 
   const [
     { data: checkins, error: checkinsError },

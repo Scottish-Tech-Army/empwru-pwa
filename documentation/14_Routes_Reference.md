@@ -34,6 +34,20 @@ Complete reference of all routes in the EmpwrU PWA.
 
 ---
 
+## Accounts & Invites
+
+empwrU is invite-only. See `16_User_Roles_and_Facilitator_Access.md` → *Invite-only sign-up*.
+
+| Route                 | Page              | Purpose                                                                         |
+| --------------------- | ----------------- | ------------------------------------------------------------------------------- |
+| `/signIn`             | Sign In           | Email and password sign-in. Shows a notice for expired invite links (`?link=expired`) |
+| `/signUp`             | How to Join       | Explains that accounts are by invitation (no sign-up form)                      |
+| `/auth/confirm`       | (route handler)   | Verifies the invite link from the email, then redirects to `/create-account`      |
+| `/create-account`       | Create Account    | Invited participant confirms their pre-filled name, chooses a password, then continues into onboarding |
+| `/facilitator/invite` | Invite Participant | Admins and facilitators invite a participant by email                           |
+
+---
+
 ## Development Routes
 
 | Route    | Page       | Purpose                                                                 |
