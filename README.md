@@ -51,7 +51,7 @@ This app is configured for **Vercel** (recommended for Next.js):
 
 1. Push to GitHub: `git push -u origin develop`
 2. Go to [vercel.com](https://vercel.com) and sign in with GitHub
-3. Click "Add New Project" → Import your repo
+3. Click "Add New Project" → Import your repository
 4. Click "Deploy"
 
 Your app will be live at `https://your-project.vercel.app`.
