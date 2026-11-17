@@ -83,20 +83,27 @@ export default function GoalDetailPage() {
   // Delete state
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const refreshGoal = useCallback(async () => {
+  useEffect(() => {
     if (!id) return;
 
-    const data = await loadGoalByIdFromSupabase(id);
-    if (data) {
-      setGoal(data);
-    } else {
-      router.push("/goals");
-    }
+    void loadGoalByIdFromSupabase(id).then((data) => {
+      if (data) {
+        setGoal(data);
+      } else {
+        router.push("/goals");
+      }
+    });
   }, [id, router]);
 
-  useEffect(() => {
-    void refreshGoal();
-  }, [refreshGoal]);
+  // After a local mutation, re-read from localStorage rather than Supabase:
+  // the upsert is fire-and-forget, so a remote read can return the pre-edit
+  // row and clobber the local change (e.g. a goal confirmed "completed" with
+  // its last step still unticked).
+  const refreshGoal = useCallback(() => {
+    if (!id) return;
+    const data = getGoalById(id);
+    if (data) setGoal(data);
+  }, [id]);
 
   const handleStepToggle = (stepId: string) => {
     if (!goal) return;
