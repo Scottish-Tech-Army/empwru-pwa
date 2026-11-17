@@ -522,6 +522,14 @@ async function getCurrentUserId(): Promise<string | null> {
 }
 
 function mapGoalFromSupabase(row: Record<string, unknown>): Goal {
+  const steps = Array.isArray(row.steps) ? (row.steps as Step[]) : [];
+  let status = (row.status as Goal["status"]) ?? "active";
+  // Repair rows saved as "completed" with unfinished steps (a past race in
+  // the goal detail page could persist that state).
+  if (status === "completed" && steps.some((s) => !s.completed)) {
+    status = "active";
+  }
+
   return {
     id: String(row.id ?? ""),
     title: String(row.title ?? ""),
@@ -533,10 +541,10 @@ function mapGoalFromSupabase(row: Record<string, unknown>): Goal {
     feelWhenDone: String(row.feel_when_done ?? ""),
     holdingBack: row.holding_back ? String(row.holding_back) : undefined,
     createdAt: String(row.created_at ?? new Date().toISOString()),
-    status: (row.status as Goal["status"]) ?? "active",
+    status,
     completedAt: row.completed_at ? String(row.completed_at) : undefined,
-    steps: Array.isArray(row.steps) ? (row.steps as Step[]) : [],
-    milestones: Array.isArray(row.steps) ? (row.steps as Step[]) : [],
+    steps,
+    milestones: steps,
     actions: Array.isArray(row.actions) ? (row.actions as Action[]) : [],
   };
 }
@@ -629,7 +637,12 @@ export async function loadGoalByIdFromSupabase(id: string): Promise<Goal | null>
   }
 
   const remoteGoal = mapGoalFromSupabase(data as Record<string, unknown>);
-  saveGoals([remoteGoal]);
+  // Merge into the cached list — replacing it would drop every other goal.
+  const goals = getGoals();
+  const index = goals.findIndex((g) => g.id === remoteGoal.id);
+  if (index === -1) goals.push(remoteGoal);
+  else goals[index] = remoteGoal;
+  saveGoals(goals);
   return remoteGoal;
 }
 
